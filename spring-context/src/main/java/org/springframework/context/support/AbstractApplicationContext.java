@@ -488,10 +488,12 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	public void refresh() throws BeansException, IllegalStateException {
 		synchronized (this.startupShutdownMonitor) {
 			//	刷新上下文环境
+			//	在springboot启动的web环境下会先进入AnnotationConfigServletWebServerApplicationContext#prepareRefresh方法，然后再调用prepareRefresh方法
 			// Prepare this context for refreshing.
 			prepareRefresh();
 
 			//	初始化BeanFactory，解析XML,相当于之前的XmlBeanFactory的操作
+			//	在SpringBoot启动的web环境下返回的是DefaultListableBeanFactory
 			// Tell the subclass to refresh the internal bean factory.
 			ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
 
@@ -506,6 +508,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			try {
 
 				//	提供子类覆盖的额外处理，即子类处理自定义的BeanFactoryPostProcess
+				//	在SpringBoot启动的web环境下进入AnnotationConfigServletWebServerApplicationContext#postProcessBeanFactory方法
 				// Allows post-processing of the bean factory in context subclasses.
 				postProcessBeanFactory(beanFactory);
 
@@ -582,6 +585,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	 */
 	protected void prepareRefresh() {
 		// Switch to active.
+		//	将context上下文置为激活状态
 		this.startupDate = System.currentTimeMillis();
 		this.closed.set(false);
 		this.active.set(true);
@@ -595,13 +599,16 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			}
 		}
 
+		//	初始化占位符属性源
 		// Initialize any placeholder property sources in the context environment.
 		initPropertySources();
 
+		//	验证所有的必要属性
 		// Validate that all properties marked as required are resolvable:
 		// see ConfigurablePropertyResolver#setRequiredProperties
 		getEnvironment().validateRequiredProperties();
 
+		//	初始化预刷新监听器
 		// Store pre-refresh ApplicationListeners...
 		if (this.earlyApplicationListeners == null) {
 			this.earlyApplicationListeners = new LinkedHashSet<>(this.applicationListeners);
@@ -624,6 +631,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	 */
 	protected void initPropertySources() {
 		// For subclasses: do nothing by default.
+		//	web类型下跳转到org.springframework.web.context.support.GenericWebApplicationContext.initPropertySources
 	}
 
 	/**

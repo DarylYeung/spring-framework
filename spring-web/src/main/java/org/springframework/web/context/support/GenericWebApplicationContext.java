@@ -16,9 +16,6 @@
 
 package org.springframework.web.context.support;
 
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletContext;
-
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.support.GenericApplicationContext;
@@ -35,6 +32,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.context.ConfigurableWebApplicationContext;
 import org.springframework.web.context.ConfigurableWebEnvironment;
 import org.springframework.web.context.ServletContextAware;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletContext;
 
 /**
  * Subclass of {@link GenericApplicationContext}, suitable for web environments.
@@ -189,6 +189,7 @@ public class GenericWebApplicationContext extends GenericApplicationContext
 	 */
 	@Override
 	protected void initPropertySources() {
+		//	SpringBoot启动的web环境下，返回的是StandardServletEnvironment
 		ConfigurableEnvironment env = getEnvironment();
 		if (env instanceof ConfigurableWebEnvironment) {
 			((ConfigurableWebEnvironment) env).initPropertySources(this.servletContext, null);
