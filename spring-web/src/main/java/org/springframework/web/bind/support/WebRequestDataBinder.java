@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package org.springframework.web.bind.support;
 
+import jakarta.servlet.ServletRequest;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.MutablePropertyValues;
@@ -25,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.BindException;
+import org.springframework.web.bind.ServletRequestDataBinder;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.WebRequest;
@@ -34,6 +36,15 @@ import org.springframework.web.multipart.support.StandardServletPartUtils;
 /**
  * Special {@link org.springframework.validation.DataBinder} to perform data binding
  * from web request parameters to JavaBeans, including support for multipart files.
+ *
+ * <p><strong>WARNING</strong>: Data binding can lead to security issues by exposing
+ * parts of the object graph that are not meant to be accessed or modified by
+ * external clients. Therefore the design and use of data binding should be considered
+ * carefully with regard to security. For more details, please refer to the dedicated
+ * sections on data binding for
+ * <a href="https://docs.spring.io/spring-framework/docs/current/reference/html/web.html#mvc-ann-initbinder-model-design">Spring Web MVC</a> and
+ * <a href="https://docs.spring.io/spring-framework/docs/current/reference/html/web-reactive.html#webflux-ann-initbinder-model-design">Spring WebFlux</a>
+ * in the reference manual.
  *
  * <p>See the DataBinder/WebDataBinder superclasses for customization options,
  * which include specifying allowed/required fields, and registering custom
@@ -90,6 +101,25 @@ public class WebRequestDataBinder extends WebDataBinder {
 
 
 	/**
+	 * Use a default or single data constructor to create the target by
+	 * binding request parameters, multipart files, or parts to constructor args.
+	 * <p>After the call, use {@link #getBindingResult()} to check for bind errors.
+	 * If there are none, the target is set, and {@link #bind(WebRequest)}
+	 * can be called for further initialization via setters.
+	 * @param request the request to bind
+	 * @since 6.1
+	 */
+	public void construct(WebRequest request) {
+		if (request instanceof NativeWebRequest nativeRequest) {
+			ServletRequest servletRequest = nativeRequest.getNativeRequest(ServletRequest.class);
+			if (servletRequest != null) {
+				construct(ServletRequestDataBinder.valueResolver(servletRequest, this));
+			}
+		}
+	}
+
+
+	/**
 	 * Bind the parameters of the given request to this binder's target,
 	 * also binding multipart files in case of a multipart request.
 	 * <p>This call can create field errors, representing basic binding
@@ -98,9 +128,9 @@ public class WebRequestDataBinder extends WebDataBinder {
 	 * <p>Multipart files are bound via their parameter name, just like normal
 	 * HTTP parameters: i.e. "uploadedFile" to an "uploadedFile" bean property,
 	 * invoking a "setUploadedFile" setter method.
-	 * <p>The type of the target property for a multipart file can be Part, MultipartFile,
-	 * byte[], or String. The latter two receive the contents of the uploaded file;
-	 * all metadata like original file name, content type, etc are lost in those cases.
+	 * <p>The type of the target property for a multipart file can be MultipartFile,
+	 * byte[], or String. Servlet Part binding is also supported when the
+	 * request has not been parsed to MultipartRequest via MultipartResolver.
 	 * @param request the request with parameters to bind (can be multipart)
 	 * @see org.springframework.web.multipart.MultipartRequest
 	 * @see org.springframework.web.multipart.MultipartFile

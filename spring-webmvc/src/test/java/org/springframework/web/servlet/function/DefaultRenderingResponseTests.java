@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 import jakarta.servlet.http.Cookie;
@@ -28,7 +27,6 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.servlet.ModelAndView;
@@ -42,13 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class DefaultRenderingResponseTests {
 
-	static final ServerResponse.Context EMPTY_CONTEXT = new ServerResponse.Context() {
-		@Override
-		public List<HttpMessageConverter<?>> messageConverters() {
-			return Collections.emptyList();
-		}
-
-	};
+	static final ServerResponse.Context EMPTY_CONTEXT = () -> Collections.emptyList();
 
 	@Test
 	public void create() throws Exception {
@@ -148,7 +140,7 @@ public class DefaultRenderingResponseTests {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		ModelAndView mav = result.writeTo(request, response, EMPTY_CONTEXT);
 		assertThat(mav).isNotNull();
-		assertThat(response.getCookies().length).isEqualTo(1);
+		assertThat(response.getCookies()).hasSize(1);
 		assertThat(response.getCookies()[0].getName()).isEqualTo("name");
 		assertThat(response.getCookies()[0].getValue()).isEqualTo("value");
 	}

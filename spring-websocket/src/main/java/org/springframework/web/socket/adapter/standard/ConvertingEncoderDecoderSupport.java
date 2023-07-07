@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,10 +84,8 @@ public abstract class ConvertingEncoderDecoderSupport<T, M> {
 	 * @see jakarta.websocket.Decoder#init(EndpointConfig)
 	 */
 	public void init(EndpointConfig config) {
-		ApplicationContext applicationContext = getApplicationContext();
-		if (applicationContext instanceof ConfigurableApplicationContext) {
-			ConfigurableListableBeanFactory beanFactory =
-					((ConfigurableApplicationContext) applicationContext).getBeanFactory();
+		if (getApplicationContext() instanceof ConfigurableApplicationContext cac) {
+			ConfigurableListableBeanFactory beanFactory = cac.getBeanFactory();
 			beanFactory.autowireBean(this);
 		}
 	}
@@ -101,7 +99,7 @@ public abstract class ConvertingEncoderDecoderSupport<T, M> {
 	}
 
 	/**
-	 * Strategy method used to obtain the {@link ConversionService}. By default this
+	 * Strategy method used to obtain the {@link ConversionService}. By default, this
 	 * method expects a bean named {@code 'webSocketConversionService'} in the
 	 * {@link #getApplicationContext() active ApplicationContext}.
 	 * @return the {@link ConversionService} (never null)
@@ -119,7 +117,7 @@ public abstract class ConvertingEncoderDecoderSupport<T, M> {
 	}
 
 	/**
-	 * Returns the active {@link ApplicationContext}. Be default this method obtains
+	 * Returns the active {@link ApplicationContext}. By default, this method obtains
 	 * the context via {@link ContextLoader#getCurrentWebApplicationContext()}, which
 	 * finds the ApplicationContext loaded via {@link ContextLoader} typically in a
 	 * Servlet container environment. When not running in a Servlet container and
@@ -132,7 +130,7 @@ public abstract class ConvertingEncoderDecoderSupport<T, M> {
 	}
 
 	/**
-	 * Returns the type being converted. By default the type is resolved using
+	 * Returns the type being converted. By default, the type is resolved using
 	 * the generic arguments of the class.
 	 */
 	protected TypeDescriptor getType() {
@@ -140,7 +138,7 @@ public abstract class ConvertingEncoderDecoderSupport<T, M> {
 	}
 
 	/**
-	 * Returns the websocket message type. By default the type is resolved using
+	 * Returns the websocket message type. By default, the type is resolved using
 	 * the generic arguments of the class.
 	 */
 	protected TypeDescriptor getMessageType() {
@@ -194,12 +192,12 @@ public abstract class ConvertingEncoderDecoderSupport<T, M> {
 			return (T) getConversionService().convert(message, getMessageType(), getType());
 		}
 		catch (ConversionException ex) {
-			if (message instanceof String) {
-				throw new DecodeException((String) message,
+			if (message instanceof String string) {
+				throw new DecodeException(string,
 						"Unable to decode websocket message using ConversionService", ex);
 			}
-			if (message instanceof ByteBuffer) {
-				throw new DecodeException((ByteBuffer) message,
+			if (message instanceof ByteBuffer byteBuffer) {
+				throw new DecodeException(byteBuffer,
 						"Unable to decode websocket message using ConversionService", ex);
 			}
 			throw ex;

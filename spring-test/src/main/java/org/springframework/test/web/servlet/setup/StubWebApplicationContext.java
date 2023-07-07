@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -314,6 +314,23 @@ class StubWebApplicationContext implements WebApplicationContext {
 		return this.beanFactory.findAnnotationOnBean(beanName, annotationType);
 	}
 
+	@Override
+	@Nullable
+	public <A extends Annotation> A findAnnotationOnBean(
+			String beanName, Class<A> annotationType, boolean allowFactoryBeanInit)
+			throws NoSuchBeanDefinitionException {
+
+		return this.beanFactory.findAnnotationOnBean(beanName, annotationType, allowFactoryBeanInit);
+	}
+
+	@Override
+	public <A extends Annotation> Set<A> findAllAnnotationsOnBean(
+			String beanName, Class<A> annotationType, boolean allowFactoryBeanInit)
+			throws NoSuchBeanDefinitionException {
+
+		return this.beanFactory.findAllAnnotationsOnBean(beanName, annotationType, allowFactoryBeanInit);
+	}
+
 
 	//---------------------------------------------------------------------
 	// Implementation of HierarchicalBeanFactory interface
@@ -393,8 +410,8 @@ class StubWebApplicationContext implements WebApplicationContext {
 
 		@Override
 		public Object initializeBean(Object existingBean, String beanName) throws BeansException {
-			if (existingBean instanceof ApplicationContextAware) {
-				((ApplicationContextAware) existingBean).setApplicationContext(StubWebApplicationContext.this);
+			if (existingBean instanceof ApplicationContextAware applicationContextAware) {
+				applicationContextAware.setApplicationContext(StubWebApplicationContext.this);
 			}
 			return existingBean;
 		}
@@ -404,6 +421,7 @@ class StubWebApplicationContext implements WebApplicationContext {
 			return BeanUtils.instantiateClass(beanClass);
 		}
 
+		@Deprecated
 		@Override
 		public Object createBean(Class<?> beanClass, int autowireMode, boolean dependencyCheck) {
 			return BeanUtils.instantiateClass(beanClass);

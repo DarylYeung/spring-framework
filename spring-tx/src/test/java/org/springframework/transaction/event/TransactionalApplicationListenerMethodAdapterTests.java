@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,13 +24,17 @@ import org.springframework.context.PayloadApplicationEvent;
 import org.springframework.context.event.ApplicationListenerMethodAdapter;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatRuntimeException;
 
 /**
  * @author Stephane Nicoll
@@ -94,7 +98,7 @@ public class TransactionalApplicationListenerMethodAdapterTests {
 		TransactionalApplicationListenerMethodAdapter adapter = createTestInstance(m);
 		adapter.addCallback(callback);
 
-		assertThatExceptionOfType(RuntimeException.class)
+		assertThatRuntimeException()
 				.isThrownBy(() -> runInTransaction(() -> adapter.onApplicationEvent(event)))
 				.withMessage("event");
 
@@ -121,6 +125,26 @@ public class TransactionalApplicationListenerMethodAdapterTests {
 		assertThat(callback.ex).isNull();
 		assertThat(adapter.getTransactionPhase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
 		assertThat(adapter.getListenerId()).endsWith("identifier");
+	}
+
+	@Test
+	public void withTransactionalAnnotation() {
+		Method m = ReflectionUtils.findMethod(SampleEvents.class, "withTransactionalAnnotation", String.class);
+		assertThatIllegalStateException().isThrownBy(() -> createTestInstance(m));
+	}
+
+	@Test
+	public void withTransactionalRequiresNewAnnotation() {
+		Method m = ReflectionUtils.findMethod(SampleEvents.class, "withTransactionalRequiresNewAnnotation", String.class);
+		supportsEventType(true, m, createGenericEventType(String.class));
+		supportsEventType(false, m, createGenericEventType(Double.class));
+	}
+
+	@Test
+	public void withAsyncTransactionalAnnotation() {
+		Method m = ReflectionUtils.findMethod(SampleEvents.class, "withAsyncTransactionalAnnotation", String.class);
+		supportsEventType(true, m, createGenericEventType(String.class));
+		supportsEventType(false, m, createGenericEventType(Double.class));
 	}
 
 
@@ -193,6 +217,21 @@ public class TransactionalApplicationListenerMethodAdapterTests {
 
 		@TransactionalEventListener(id = "identifier")
 		public void identified(String data) {
+		}
+
+		@TransactionalEventListener
+		@Transactional
+		public void withTransactionalAnnotation(String data) {
+		}
+
+		@TransactionalEventListener
+		@Transactional(propagation = Propagation.REQUIRES_NEW)
+		public void withTransactionalRequiresNewAnnotation(String data) {
+		}
+
+		@TransactionalEventListener
+		@Async @Transactional
+		public void withAsyncTransactionalAnnotation(String data) {
 		}
 	}
 

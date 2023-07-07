@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +37,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.EmbeddedValueResolverAware;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.core.log.LogFormatUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpRange;
@@ -78,7 +78,7 @@ import org.springframework.web.util.UrlPathHelper;
  * <p>This request handler may also be configured with a
  * {@link #setResourceResolvers(List) resourcesResolver} and
  * {@link #setResourceTransformers(List) resourceTransformer} chains to support
- * arbitrary resolution and transformation of resources being served. By default
+ * arbitrary resolution and transformation of resources being served. By default,
  * a {@link PathResourceResolver} simply finds resources based on the configured
  * "locations". An application can configure additional resolvers and transformers
  * such as the {@link VersionResourceResolver} which can resolve and prepare URLs
@@ -489,7 +489,7 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 
 		result.addAll(this.locationResources);
 		if (isOptimizeLocations()) {
-			result = result.stream().filter(Resource::exists).collect(Collectors.toList());
+			result = result.stream().filter(Resource::exists).toList();
 		}
 
 		this.locationsToUse.clear();
@@ -522,7 +522,7 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 	/**
 	 * Initialize the strategy to use to determine the media type for a resource.
 	 * @deprecated as of 5.2.4 this method returns {@code null}, and if a
-	 * sub-class returns an actual instance,the instance is used only as a
+	 * subclass returns an actual instance, the instance is used only as a
 	 * source of media type mappings, if it contains any. Please, use
 	 * {@link #setMediaTypes(Map)} instead, or if you need to change behavior,
 	 * you can override {@link #getMediaType(HttpServletRequest, Resource)}.
@@ -537,8 +537,8 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 
 	/**
 	 * Processes a resource request.
-	 * <p>Checks for the existence of the requested resource in the configured list of locations.
-	 * If the resource does not exist, a {@code 404} response will be returned to the client.
+	 * <p>Finds the requested resource under one of the configured locations.
+	 * If the resource does not exist, {@link NoResourceFoundException} is raised.
 	 * If the resource exists, the request will be checked for the presence of the
 	 * {@code Last-Modified} header, and its value will be compared against the last-modified
 	 * timestamp of the given resource, returning a {@code 304} status code if the
@@ -555,12 +555,11 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 		Resource resource = getResource(request);
 		if (resource == null) {
 			logger.debug("Resource not found");
-			response.sendError(HttpServletResponse.SC_NOT_FOUND);
-			return;
+			throw new NoResourceFoundException(HttpMethod.valueOf(request.getMethod()), getPath(request));
 		}
 
 		if (HttpMethod.OPTIONS.matches(request.getMethod())) {
-			response.setHeader("Allow", getAllowHeader());
+			response.setHeader(HttpHeaders.ALLOW, getAllowHeader());
 			return;
 		}
 
@@ -584,7 +583,14 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 		ServletServerHttpResponse outputMessage = new ServletServerHttpResponse(response);
 		if (request.getHeader(HttpHeaders.RANGE) == null) {
 			Assert.state(this.resourceHttpMessageConverter != null, "Not initialized");
-			this.resourceHttpMessageConverter.write(resource, mediaType, outputMessage);
+
+			if (HttpMethod.HEAD.matches(request.getMethod())) {
+				this.resourceHttpMessageConverter.addDefaultHeaders(outputMessage, resource, mediaType);
+				outputMessage.flush();
+			}
+			else {
+				this.resourceHttpMessageConverter.write(resource, mediaType, outputMessage);
+			}
 		}
 		else {
 			Assert.state(this.resourceRegionHttpMessageConverter != null, "Not initialized");
@@ -604,12 +610,7 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 
 	@Nullable
 	protected Resource getResource(HttpServletRequest request) throws IOException {
-		String path = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-		if (path == null) {
-			throw new IllegalStateException("Required request attribute '" +
-					HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE + "' is not set");
-		}
-
+		String path = getPath(request);
 		path = processPath(path);
 		if (!StringUtils.hasText(path) || isInvalidPath(path)) {
 			return null;
@@ -618,14 +619,23 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 			return null;
 		}
 
-		Assert.notNull(this.resolverChain, "ResourceResolverChain not initialized.");
-		Assert.notNull(this.transformerChain, "ResourceTransformerChain not initialized.");
+		Assert.state(this.resolverChain != null, "ResourceResolverChain not initialized.");
+		Assert.state(this.transformerChain != null, "ResourceTransformerChain not initialized.");
 
 		Resource resource = this.resolverChain.resolveResource(request, path, getLocations());
 		if (resource != null) {
 			resource = this.transformerChain.transform(request, resource);
 		}
 		return resource;
+	}
+
+	private static String getPath(HttpServletRequest request) {
+		String path = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+		if (path == null) {
+			throw new IllegalStateException("Required request attribute '" +
+					HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE + "' is not set");
+		}
+		return path;
 	}
 
 	/**
@@ -711,7 +721,7 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 	}
 
 	/**
-	 * Identifies invalid resource paths. By default rejects:
+	 * Identifies invalid resource paths. By default, rejects:
 	 * <ul>
 	 * <li>Paths that contain "WEB-INF" or "META-INF"
 	 * <li>Paths that contain "../" after a call to
@@ -729,7 +739,8 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 	protected boolean isInvalidPath(String path) {
 		if (path.contains("WEB-INF") || path.contains("META-INF")) {
 			if (logger.isWarnEnabled()) {
-				logger.warn("Path with \"WEB-INF\" or \"META-INF\": [" + path + "]");
+				logger.warn(LogFormatUtils.formatValue(
+						"Path with \"WEB-INF\" or \"META-INF\": [" + path + "]", -1, true));
 			}
 			return true;
 		}
@@ -737,14 +748,16 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 			String relativePath = (path.charAt(0) == '/' ? path.substring(1) : path);
 			if (ResourceUtils.isUrl(relativePath) || relativePath.startsWith("url:")) {
 				if (logger.isWarnEnabled()) {
-					logger.warn("Path represents URL or has \"url:\" prefix: [" + path + "]");
+					logger.warn(LogFormatUtils.formatValue(
+							"Path represents URL or has \"url:\" prefix: [" + path + "]", -1, true));
 				}
 				return true;
 			}
 		}
 		if (path.contains("..") && StringUtils.cleanPath(path).contains("../")) {
 			if (logger.isWarnEnabled()) {
-				logger.warn("Path contains \"../\" after call to StringUtils#cleanPath: [" + path + "]");
+				logger.warn(LogFormatUtils.formatValue(
+						"Path contains \"../\" after call to StringUtils#cleanPath: [" + path + "]", -1, true));
 			}
 			return true;
 		}

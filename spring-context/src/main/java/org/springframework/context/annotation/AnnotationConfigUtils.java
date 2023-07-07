@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,14 +82,6 @@ public abstract class AnnotationConfigUtils {
 	 */
 	public static final String AUTOWIRED_ANNOTATION_PROCESSOR_BEAN_NAME =
 			"org.springframework.context.annotation.internalAutowiredAnnotationProcessor";
-
-	/**
-	 * The bean name of the internally managed Required annotation processor.
-	 * @deprecated as of 5.1, since no Required processor is registered by default anymore
-	 */
-	@Deprecated
-	public static final String REQUIRED_ANNOTATION_PROCESSOR_BEAN_NAME =
-			"org.springframework.context.annotation.internalRequiredAnnotationProcessor";
 
 	/**
 	 * The bean name of the internally managed common annotation processor.
@@ -243,11 +235,11 @@ public abstract class AnnotationConfigUtils {
 
 	@Nullable
 	private static DefaultListableBeanFactory unwrapDefaultListableBeanFactory(BeanDefinitionRegistry registry) {
-		if (registry instanceof DefaultListableBeanFactory) {
-			return (DefaultListableBeanFactory) registry;
+		if (registry instanceof DefaultListableBeanFactory dlbf) {
+			return dlbf;
 		}
-		else if (registry instanceof GenericApplicationContext) {
-			return ((GenericApplicationContext) registry).getDefaultListableBeanFactory();
+		else if (registry instanceof GenericApplicationContext gac) {
+			return gac.getDefaultListableBeanFactory();
 		}
 		else {
 			return null;
@@ -306,7 +298,7 @@ public abstract class AnnotationConfigUtils {
 
 	@Nullable
 	static AnnotationAttributes attributesFor(AnnotatedTypeMetadata metadata, String annotationClassName) {
-		return AnnotationAttributes.fromMap(metadata.getAnnotationAttributes(annotationClassName, false));
+		return AnnotationAttributes.fromMap(metadata.getAnnotationAttributes(annotationClassName));
 	}
 
 	static Set<AnnotationAttributes> attributesForRepeatable(AnnotationMetadata metadata,
@@ -322,10 +314,10 @@ public abstract class AnnotationConfigUtils {
 		Set<AnnotationAttributes> result = new LinkedHashSet<>();
 
 		// Direct annotation present?
-		addAttributesIfNotNull(result, metadata.getAnnotationAttributes(annotationClassName, false));
+		addAttributesIfNotNull(result, metadata.getAnnotationAttributes(annotationClassName));
 
 		// Container annotation present?
-		Map<String, Object> container = metadata.getAnnotationAttributes(containerClassName, false);
+		Map<String, Object> container = metadata.getAnnotationAttributes(containerClassName);
 		if (container != null && container.containsKey("value")) {
 			for (Map<String, Object> containedAttributes : (Map<String, Object>[]) container.get("value")) {
 				addAttributesIfNotNull(result, containedAttributes);

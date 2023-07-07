@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,7 +182,7 @@ public class JmsActivationSpecConfig {
 	 * <p>Note that JCA resource adapters generally only support auto and dups-ok
 	 * (see Spring's {@link StandardJmsActivationSpecFactory}). ActiveMQ also
 	 * supports "SESSION_TRANSACTED" in the form of RA-managed transactions
-	 * (automatically translated by Spring's {@link DefaultJmsActivationSpecFactory}.
+	 * (automatically translated by Spring's {@link DefaultJmsActivationSpecFactory}).
 	 * @param constantName the name of the {@link Session} acknowledge mode constant
 	 * @see jakarta.jms.Session#AUTO_ACKNOWLEDGE
 	 * @see jakarta.jms.Session#CLIENT_ACKNOWLEDGE
@@ -226,7 +226,7 @@ public class JmsActivationSpecConfig {
 		try {
 			int separatorIndex = concurrency.indexOf('-');
 			if (separatorIndex != -1) {
-				setMaxConcurrency(Integer.parseInt(concurrency.substring(separatorIndex + 1)));
+				setMaxConcurrency(Integer.parseInt(concurrency, separatorIndex + 1, concurrency.length(), 10));
 			}
 			else {
 				setMaxConcurrency(Integer.parseInt(concurrency));

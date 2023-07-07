@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,12 @@ import org.springframework.util.concurrent.ListenableFuture;
  * @see DefaultManagedTaskExecutor
  * @see ThreadPoolTaskExecutor
  */
+@SuppressWarnings("deprecation")
 public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, SchedulingTaskExecutor {
+
+	private static final Executor STUB_EXECUTOR = (task -> {
+		throw new IllegalStateException("Executor not configured");
+	});
 
 	@Nullable
 	private static Class<?> managedExecutorServiceClass;
@@ -79,15 +84,22 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 		}
 	}
 
-	private Executor concurrentExecutor;
 
-	private TaskExecutorAdapter adaptedExecutor;
+	private Executor concurrentExecutor = STUB_EXECUTOR;
+
+	private TaskExecutorAdapter adaptedExecutor = new TaskExecutorAdapter(STUB_EXECUTOR);
+
+	@Nullable
+	private TaskDecorator taskDecorator;
 
 
 	/**
 	 * Create a new ConcurrentTaskExecutor, using a single thread executor as default.
 	 * @see java.util.concurrent.Executors#newSingleThreadExecutor()
+	 * @deprecated in favor of {@link #ConcurrentTaskExecutor(Executor)} with an
+	 * externally provided Executor
 	 */
+	@Deprecated(since = "6.1")
 	public ConcurrentTaskExecutor() {
 		this.concurrentExecutor = Executors.newSingleThreadExecutor();
 		this.adaptedExecutor = new TaskExecutorAdapter(this.concurrentExecutor);
@@ -100,8 +112,9 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 	 * @param executor the {@link java.util.concurrent.Executor} to delegate to
 	 */
 	public ConcurrentTaskExecutor(@Nullable Executor executor) {
-		this.concurrentExecutor = (executor != null ? executor : Executors.newSingleThreadExecutor());
-		this.adaptedExecutor = getAdaptedExecutor(this.concurrentExecutor);
+		if (executor != null) {
+			setConcurrentExecutor(executor);
+		}
 	}
 
 
@@ -110,8 +123,8 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 	 * <p>Autodetects a JSR-236 {@link jakarta.enterprise.concurrent.ManagedExecutorService}
 	 * in order to expose {@link jakarta.enterprise.concurrent.ManagedTask} adapters for it.
 	 */
-	public final void setConcurrentExecutor(@Nullable Executor executor) {
-		this.concurrentExecutor = (executor != null ? executor : Executors.newSingleThreadExecutor());
+	public final void setConcurrentExecutor(Executor executor) {
+		this.concurrentExecutor = executor;
 		this.adaptedExecutor = getAdaptedExecutor(this.concurrentExecutor);
 	}
 
@@ -138,6 +151,7 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 	 * @since 4.3
 	 */
 	public final void setTaskDecorator(TaskDecorator taskDecorator) {
+		this.taskDecorator = taskDecorator;
 		this.adaptedExecutor.setTaskDecorator(taskDecorator);
 	}
 
@@ -147,6 +161,7 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 		this.adaptedExecutor.execute(task);
 	}
 
+	@Deprecated
 	@Override
 	public void execute(Runnable task, long startTimeout) {
 		this.adaptedExecutor.execute(task, startTimeout);
@@ -173,11 +188,15 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 	}
 
 
-	private static TaskExecutorAdapter getAdaptedExecutor(Executor concurrentExecutor) {
+	private TaskExecutorAdapter getAdaptedExecutor(Executor concurrentExecutor) {
 		if (managedExecutorServiceClass != null && managedExecutorServiceClass.isInstance(concurrentExecutor)) {
 			return new ManagedTaskExecutorAdapter(concurrentExecutor);
 		}
-		return new TaskExecutorAdapter(concurrentExecutor);
+		TaskExecutorAdapter adapter = new TaskExecutorAdapter(concurrentExecutor);
+		if (this.taskDecorator != null) {
+			adapter.setTaskDecorator(this.taskDecorator);
+		}
+		return adapter;
 	}
 
 
@@ -229,10 +248,10 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 
 		public static Runnable buildManagedTask(Runnable task, String identityName) {
 			Map<String, String> properties;
-			if (task instanceof SchedulingAwareRunnable) {
+			if (task instanceof SchedulingAwareRunnable schedulingAwareRunnable) {
 				properties = new HashMap<>(4);
 				properties.put(ManagedTask.LONGRUNNING_HINT,
-						Boolean.toString(((SchedulingAwareRunnable) task).isLongLived()));
+						Boolean.toString(schedulingAwareRunnable.isLongLived()));
 			}
 			else {
 				properties = new HashMap<>(2);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ import org.springframework.context.ResourceLoaderAware;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.core.io.support.ResourcePropertiesPersister;
 import org.springframework.lang.Nullable;
+import org.springframework.util.DefaultPropertiesPersister;
 import org.springframework.util.PropertiesPersister;
 import org.springframework.util.StringUtils;
 
@@ -64,7 +64,7 @@ import org.springframework.util.StringUtils;
  * "WEB-INF/messages_en.xml" etc. Note that message definitions in a <i>previous</i>
  * resource bundle will override ones in a later bundle, due to sequential lookup.
 
- * <p>This MessageSource can easily be used outside of an
+ * <p>This MessageSource can easily be used outside an
  * {@link org.springframework.context.ApplicationContext}: it will use a
  * {@link org.springframework.core.io.DefaultResourceLoader} as default,
  * simply getting overridden with the ApplicationContext's resource loader
@@ -80,7 +80,6 @@ import org.springframework.util.StringUtils;
  * @see #setFileEncodings
  * @see #setPropertiesPersister
  * @see #setResourceLoader
- * @see ResourcePropertiesPersister
  * @see org.springframework.core.io.DefaultResourceLoader
  * @see ResourceBundleMessageSource
  * @see java.util.ResourceBundle
@@ -98,7 +97,7 @@ public class ReloadableResourceBundleMessageSource extends AbstractResourceBased
 
 	private boolean concurrentRefresh = true;
 
-	private PropertiesPersister propertiesPersister = ResourcePropertiesPersister.INSTANCE;
+	private PropertiesPersister propertiesPersister = DefaultPropertiesPersister.INSTANCE;
 
 	private ResourceLoader resourceLoader = new DefaultResourceLoader();
 
@@ -143,12 +142,12 @@ public class ReloadableResourceBundleMessageSource extends AbstractResourceBased
 
 	/**
 	 * Set the PropertiesPersister to use for parsing properties files.
-	 * <p>The default is ResourcePropertiesPersister.
-	 * @see ResourcePropertiesPersister#INSTANCE
+	 * <p>The default is {@code DefaultPropertiesPersister}.
+	 * @see DefaultPropertiesPersister#INSTANCE
 	 */
 	public void setPropertiesPersister(@Nullable PropertiesPersister propertiesPersister) {
 		this.propertiesPersister =
-				(propertiesPersister != null ? propertiesPersister : ResourcePropertiesPersister.INSTANCE);
+				(propertiesPersister != null ? propertiesPersister : DefaultPropertiesPersister.INSTANCE);
 	}
 
 	/**
@@ -156,7 +155,7 @@ public class ReloadableResourceBundleMessageSource extends AbstractResourceBased
 	 * <p>The default is a DefaultResourceLoader. Will get overridden by the
 	 * ApplicationContext if running in a context, as it implements the
 	 * ResourceLoaderAware interface. Can be manually overridden when
-	 * running outside of an ApplicationContext.
+	 * running outside an ApplicationContext.
 	 * @see org.springframework.core.io.DefaultResourceLoader
 	 * @see org.springframework.context.ResourceLoaderAware
 	 */
@@ -401,19 +400,16 @@ public class ReloadableResourceBundleMessageSource extends AbstractResourceBased
 
 	/**
 	 * Refresh the PropertiesHolder for the given bundle filename.
-	 * The holder can be {@code null} if not cached before, or a timed-out cache entry
+	 * <p>The holder can be {@code null} if not cached before, or a timed-out cache entry
 	 * (potentially getting re-validated against the current last-modified timestamp).
 	 * @param filename the bundle filename (basename + Locale)
 	 * @param propHolder the current PropertiesHolder for the bundle
+	 * @see #resolveResource(String)
 	 */
 	protected PropertiesHolder refreshProperties(String filename, @Nullable PropertiesHolder propHolder) {
 		long refreshTimestamp = (getCacheMillis() < 0 ? -1 : System.currentTimeMillis());
 
-		Resource resource = this.resourceLoader.getResource(filename + PROPERTIES_SUFFIX);
-		if (!resource.exists()) {
-			resource = this.resourceLoader.getResource(filename + XML_SUFFIX);
-		}
-
+		Resource resource = resolveResource(filename);
 		if (resource.exists()) {
 			long fileTimestamp = -1;
 			if (getCacheMillis() >= 0) {
@@ -452,7 +448,7 @@ public class ReloadableResourceBundleMessageSource extends AbstractResourceBased
 		else {
 			// Resource does not exist.
 			if (logger.isDebugEnabled()) {
-				logger.debug("No properties file found for [" + filename + "] - neither plain properties nor XML");
+				logger.debug("No properties file found for [" + filename + "]");
 			}
 			// Empty holder representing "not found".
 			propHolder = new PropertiesHolder();
@@ -461,6 +457,45 @@ public class ReloadableResourceBundleMessageSource extends AbstractResourceBased
 		propHolder.setRefreshTimestamp(refreshTimestamp);
 		this.cachedProperties.put(filename, propHolder);
 		return propHolder;
+	}
+
+	/**
+	 * Resolve the specified bundle {@code filename} into a concrete {@link Resource},
+	 * potentially checking multiple sources or file extensions.
+	 * <p>If no suitable concrete {@code Resource} can be resolved, this method
+	 * returns a {@code Resource} for which {@link Resource#exists()} returns
+	 * {@code false}, which gets subsequently ignored.
+	 * <p>This can be leveraged to check the last modification timestamp or to load
+	 * properties from alternative sources &mdash; for example, from an XML BLOB
+	 * in a database, or from properties serialized using a custom format such as
+	 * JSON.
+	 * <p>The default implementation delegates to the configured
+	 * {@link #setResourceLoader(ResourceLoader) ResourceLoader} to resolve
+	 * resources, first checking for an existing {@code Resource} with a
+	 * {@code .properties} extension, and otherwise returning a {@code Resource}
+	 * with a {@code .xml} extension.
+	 * <p>When overriding this method, {@link #loadProperties(Resource, String)}
+	 * <strong>must</strong> be capable of loading properties from any type of
+	 * {@code Resource} returned by this method. As a consequence, implementors
+	 * are strongly encouraged to also override {@code loadProperties()}.
+	 * <p>As an alternative to overriding this method, you can configure a
+	 * {@link #setPropertiesPersister(PropertiesPersister) PropertiesPersister}
+	 * that is capable of dealing with all resources returned by this method.
+	 * Please note, however, that the default {@code loadProperties()} implementation
+	 * uses {@link PropertiesPersister#loadFromXml(Properties, InputStream) loadFromXml}
+	 * for XML resources and otherwise uses the two
+	 * {@link PropertiesPersister#load(Properties, InputStream) load} methods
+	 * for other types of resources.
+	 * @param filename the bundle filename (basename + Locale)
+	 * @return the {@code Resource} to use
+	 * @since 6.1
+	 */
+	protected Resource resolveResource(String filename) {
+		Resource propertiesResource = this.resourceLoader.getResource(filename + PROPERTIES_SUFFIX);
+		if (propertiesResource.exists()) {
+			return propertiesResource;
+		}
+		return this.resourceLoader.getResource(filename + XML_SUFFIX);
 	}
 
 	/**
@@ -535,8 +570,8 @@ public class ReloadableResourceBundleMessageSource extends AbstractResourceBased
 	 */
 	public void clearCacheIncludingAncestors() {
 		clearCache();
-		if (getParentMessageSource() instanceof ReloadableResourceBundleMessageSource) {
-			((ReloadableResourceBundleMessageSource) getParentMessageSource()).clearCacheIncludingAncestors();
+		if (getParentMessageSource() instanceof ReloadableResourceBundleMessageSource reloadableMsgSrc) {
+			reloadableMsgSrc.clearCacheIncludingAncestors();
 		}
 	}
 

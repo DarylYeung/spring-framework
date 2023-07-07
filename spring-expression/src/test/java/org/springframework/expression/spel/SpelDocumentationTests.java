@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@
 
 package org.springframework.expression.spel;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -41,16 +44,17 @@ import static org.assertj.core.api.Assertions.within;
 /**
  * Test the examples specified in the documentation.
  *
- * NOTE: any outgoing changes from this file upon synchronizing with the repo may indicate that
+ * <p>NOTE: any outgoing changes from this file upon synchronizing with the repo may indicate that
  * you need to update the documentation too !
  *
  * @author Andy Clement
  */
 @SuppressWarnings("rawtypes")
-public class SpelDocumentationTests extends AbstractExpressionTests {
+class SpelDocumentationTests extends AbstractExpressionTests {
 
-	static Inventor tesla ;
-	static Inventor pupin ;
+	static Inventor tesla;
+
+	static Inventor pupin;
 
 	static {
 		GregorianCalendar c = new GregorianCalendar();
@@ -65,53 +69,24 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 		pupin.setPlaceOfBirth(new PlaceOfBirth("Idvor"));
 
 	}
-	static class IEEE {
-		private String name;
-
-
-		public Inventor[] Members = new Inventor[1];
-		public List Members2 = new ArrayList();
-		public Map<String,Object> officers = new HashMap<>();
-
-		public List<Map<String, Object>> reverse = new ArrayList<>();
-
-		@SuppressWarnings("unchecked")
-		IEEE() {
-			officers.put("president",pupin);
-			List linv = new ArrayList();
-			linv.add(tesla);
-			officers.put("advisors",linv);
-			Members2.add(tesla);
-			Members2.add(pupin);
-
-			reverse.add(officers);
-		}
-
-		public boolean isMember(String name) {
-			return true;
-		}
-
-		public String getName() { return name; }
-		public void setName(String n) { this.name = n; }
-	}
 
 	@Test
-	public void testMethodInvocation() {
+	void methodInvocation() {
 		evaluate("'Hello World'.concat('!')","Hello World!",String.class);
 	}
 
 	@Test
-	public void testBeanPropertyAccess() {
+	void beanPropertyAccess() {
 		evaluate("new String('Hello World'.bytes)","Hello World",String.class);
 	}
 
 	@Test
-	public void testArrayLengthAccess() {
+	void arrayLengthAccess() {
 		evaluate("'Hello World'.bytes.length",11,Integer.class);
 	}
 
 	@Test
-	public void testRootObject() throws Exception {
+	void rootObject() throws Exception {
 		GregorianCalendar c = new GregorianCalendar();
 		c.set(1856, 7, 9);
 
@@ -129,7 +104,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	}
 
 	@Test
-	public void testEqualityCheck() throws Exception {
+	void equalityCheck() throws Exception {
 		ExpressionParser parser = new SpelExpressionParser();
 
 		StandardEvaluationContext context = new StandardEvaluationContext();
@@ -143,13 +118,13 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// Section 7.4.1
 
 	@Test
-	public void testXMLBasedConfig() {
+	void xmlBasedConfig() {
 		evaluate("(T(java.lang.Math).random() * 100.0 )>0",true,Boolean.class);
 	}
 
 	// Section 7.5
 	@Test
-	public void testLiterals() throws Exception {
+	void literals() throws Exception {
 		ExpressionParser parser = new SpelExpressionParser();
 
 		String helloWorld = (String) parser.parseExpression("'Hello World'").getValue(); // evals to "Hello World"
@@ -169,7 +144,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	}
 
 	@Test
-	public void testPropertyAccess() throws Exception {
+	void propertyAccess() throws Exception {
 		EvaluationContext context = TestScenarioCreator.getTestEvaluationContext();
 		int year = (Integer) parser.parseExpression("Birthdate.Year + 1900").getValue(context); // 1856
 		assertThat(year).isEqualTo(1856);
@@ -179,12 +154,12 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	}
 
 	@Test
-	public void testPropertyNavigation() throws Exception {
+	void propertyNavigation() throws Exception {
 		ExpressionParser parser = new SpelExpressionParser();
 
 		// Inventions Array
 		StandardEvaluationContext teslaContext = TestScenarioCreator.getTestEvaluationContext();
-//		teslaContext.setRootObject(tesla);
+		// teslaContext.setRootObject(tesla);
 
 		// evaluates to "Induction motor"
 		String invention = parser.parseExpression("inventions[3]").getValue(teslaContext, String.class);
@@ -206,9 +181,8 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 		assertThat(invention).isEqualTo("Wireless communication");
 	}
 
-
 	@Test
-	public void testDictionaryAccess() throws Exception {
+	void dictionaryAccess() throws Exception {
 		StandardEvaluationContext societyContext = new StandardEvaluationContext();
 		societyContext.setRootObject(new IEEE());
 		// Officer's Dictionary
@@ -233,7 +207,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.3
 
 	@Test
-	public void testMethodInvocation2() throws Exception {
+	void methodInvocation2() throws Exception {
 		// string literal, evaluates to "bc"
 		String c = parser.parseExpression("'abc'.substring(1, 3)").getValue(String.class);
 		assertThat(c).isEqualTo("bc");
@@ -248,7 +222,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.4.1
 
 	@Test
-	public void testRelationalOperators() throws Exception {
+	void relationalOperators() throws Exception {
 		boolean result = parser.parseExpression("2 == 2").getValue(Boolean.class);
 		assertThat(result).isTrue();
 		// evaluates to false
@@ -261,7 +235,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	}
 
 	@Test
-	public void testOtherOperators() throws Exception {
+	void otherOperators() throws Exception {
 		// evaluates to false
 		boolean falseValue = parser.parseExpression("'xyz' instanceof T(int)").getValue(Boolean.class);
 		assertThat(falseValue).isFalse();
@@ -278,7 +252,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.4.2
 
 	@Test
-	public void testLogicalOperators() throws Exception {
+	void logicalOperators() throws Exception {
 
 		StandardEvaluationContext societyContext = new StandardEvaluationContext();
 		societyContext.setRootObject(new IEEE());
@@ -319,7 +293,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.4.3
 
 	@Test
-	public void testNumericalOperators() throws Exception {
+	void numericalOperators() throws Exception {
 		// Addition
 		int two = parser.parseExpression("1 + 1").getValue(Integer.class); // 2
 		assertThat(two).isEqualTo(2);
@@ -363,7 +337,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.5
 
 	@Test
-	public void testAssignment() throws Exception {
+	void assignment() throws Exception {
 		Inventor inventor = new Inventor();
 		StandardEvaluationContext inventorContext = new StandardEvaluationContext();
 		inventorContext.setRootObject(inventor);
@@ -381,7 +355,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.6
 
 	@Test
-	public void testTypes() throws Exception {
+	void types() throws Exception {
 		Class<?> dateClass = parser.parseExpression("T(java.util.Date)").getValue(Class.class);
 		assertThat(dateClass).isEqualTo(Date.class);
 		boolean trueValue = parser.parseExpression("T(java.math.RoundingMode).CEILING < T(java.math.RoundingMode).FLOOR").getValue(Boolean.class);
@@ -391,7 +365,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.7
 
 	@Test
-	public void testConstructors() throws Exception {
+	void constructors() throws Exception {
 		StandardEvaluationContext societyContext = new StandardEvaluationContext();
 		societyContext.setRootObject(new IEEE());
 		Inventor einstein =
@@ -404,7 +378,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.8
 
 	@Test
-	public void testVariables() throws Exception {
+	void variables() throws Exception {
 		Inventor tesla = new Inventor("Nikola Tesla", "Serbian");
 		StandardEvaluationContext context = new StandardEvaluationContext();
 		context.setVariable("newName", "Mike Tesla");
@@ -416,9 +390,9 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 		assertThat(tesla.getFoo()).isEqualTo("Mike Tesla");
 	}
 
-	@SuppressWarnings("unchecked")
 	@Test
-	public void testSpecialVariables() throws Exception {
+	@SuppressWarnings("unchecked")
+	void specialVariables() throws Exception {
 		// create an array of integers
 		List<Integer> primes = Arrays.asList(2, 3, 5, 7, 11, 13, 17);
 
@@ -435,7 +409,7 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 	// 7.5.9
 
 	@Test
-	public void testFunctions() throws Exception {
+	void functions() throws Exception {
 		ExpressionParser parser = new SpelExpressionParser();
 		StandardEvaluationContext context = new StandardEvaluationContext();
 		context.registerFunction("reverseString", StringUtils.class.getDeclaredMethod("reverseString", String.class));
@@ -444,10 +418,42 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 		assertThat(helloWorldReversed).isEqualTo("dlrow olleh");
 	}
 
+	@Test
+	void methodHandlesNotBound() throws Throwable {
+		ExpressionParser parser = new SpelExpressionParser();
+		StandardEvaluationContext context = new StandardEvaluationContext();
+
+		MethodHandle mh = MethodHandles.lookup().findVirtual(String.class, "formatted",
+				MethodType.methodType(String.class, Object[].class));
+		context.setVariable("message", mh);
+
+		String message = parser.parseExpression("#message('Simple message: <%s>', 'Hello World', 'ignored')")
+				.getValue(context, String.class);
+		assertThat(message).isEqualTo("Simple message: <Hello World>");
+	}
+
+	@Test
+	void methodHandlesFullyBound() throws Throwable {
+		ExpressionParser parser = new SpelExpressionParser();
+		StandardEvaluationContext context = new StandardEvaluationContext();
+
+		String template = "This is a %s message with %s words: <%s>";
+		Object varargs = new Object[] { "prerecorded", 3, "Oh Hello World!", "ignored" };
+		MethodHandle mh = MethodHandles.lookup().findVirtual(String.class, "formatted",
+						MethodType.methodType(String.class, Object[].class))
+				.bindTo(template)
+				.bindTo(varargs); //here we have to provide arguments in a single array binding
+		context.setVariable("message", mh);
+
+		String message = parser.parseExpression("#message()")
+				.getValue(context, String.class);
+		assertThat(message).isEqualTo("This is a prerecorded message with 3 words: <Oh Hello World!>");
+	}
+
 	// 7.5.10
 
 	@Test
-	public void testTernary() throws Exception {
+	void ternary() throws Exception {
 		String falseString = parser.parseExpression("false ? 'trueExp' : 'falseExp'").getValue(String.class);
 		assertThat(falseString).isEqualTo("falseExp");
 
@@ -468,23 +474,23 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 
 	// 7.5.11
 
-	@SuppressWarnings("unchecked")
 	@Test
-	public void testSelection() throws Exception {
+	@SuppressWarnings("unchecked")
+	void selection() throws Exception {
 		StandardEvaluationContext societyContext = new StandardEvaluationContext();
 		societyContext.setRootObject(new IEEE());
 		List<Inventor> list = (List<Inventor>) parser.parseExpression("Members2.?[nationality == 'Serbian']").getValue(societyContext);
-		assertThat(list.size()).isEqualTo(1);
+		assertThat(list).hasSize(1);
 		assertThat(list.get(0).getName()).isEqualTo("Nikola Tesla");
 	}
 
 	// 7.5.12
 
 	@Test
-	public void testTemplating() throws Exception {
+	void templating() throws Exception {
 		String randomPhrase =
 				parser.parseExpression("random number is ${T(java.lang.Math).random()}", new TemplatedParserContext()).getValue(String.class);
-		assertThat(randomPhrase.startsWith("random number")).isTrue();
+		assertThat(randomPhrase).startsWith("random number");
 	}
 
 	static class TemplatedParserContext implements ParserContext {
@@ -505,14 +511,39 @@ public class SpelDocumentationTests extends AbstractExpressionTests {
 		}
 	}
 
+	static class IEEE {
+		private String name;
+
+		public Inventor[] Members = new Inventor[1];
+		public List Members2 = new ArrayList();
+		public Map<String,Object> officers = new HashMap<>();
+
+		public List<Map<String, Object>> reverse = new ArrayList<>();
+
+		@SuppressWarnings("unchecked")
+		IEEE() {
+			officers.put("president",pupin);
+			List linv = new ArrayList();
+			linv.add(tesla);
+			officers.put("advisors",linv);
+			Members2.add(tesla);
+			Members2.add(pupin);
+
+			reverse.add(officers);
+		}
+
+		public boolean isMember(String name) {
+			return true;
+		}
+
+		public String getName() { return name; }
+		public void setName(String n) { this.name = n; }
+	}
+
 	static class StringUtils {
 
 		public static String reverseString(String input) {
-			StringBuilder backwards = new StringBuilder();
-			for (int i = 0; i < input.length(); i++) {
-				backwards.append(input.charAt(input.length() - 1 - i));
-			}
-			return backwards.toString();
+			return new StringBuilder(input).reverse().toString();
 		}
 	}
 

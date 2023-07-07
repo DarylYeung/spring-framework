@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.lang.Nullable;
@@ -44,6 +44,7 @@ import org.springframework.util.Assert;
  * Adapt {@link ServerHttpResponse} to the Servlet {@link HttpServletResponse}.
  *
  * @author Rossen Stoyanchev
+ * @author Juergen Hoeller
  * @since 5.0
  */
 class ServletServerHttpResponse extends AbstractListenerServerHttpResponse {
@@ -101,12 +102,13 @@ class ServletServerHttpResponse extends AbstractListenerServerHttpResponse {
 	}
 
 	@Override
-	public HttpStatus getStatusCode() {
-		HttpStatus status = super.getStatusCode();
-		return (status != null ? status : HttpStatus.resolve(this.response.getStatus()));
+	public HttpStatusCode getStatusCode() {
+		HttpStatusCode status = super.getStatusCode();
+		return (status != null ? status : HttpStatusCode.valueOf(this.response.getStatus()));
 	}
 
 	@Override
+	@Deprecated
 	public Integer getRawStatusCode() {
 		Integer status = super.getRawStatusCode();
 		return (status != null ? status : this.response.getStatus());
@@ -114,9 +116,9 @@ class ServletServerHttpResponse extends AbstractListenerServerHttpResponse {
 
 	@Override
 	protected void applyStatusCode() {
-		Integer status = super.getRawStatusCode();
+		HttpStatusCode status = super.getStatusCode();
 		if (status != null) {
-			this.response.setStatus(status);
+			this.response.setStatus(status.value());
 		}
 	}
 
@@ -127,6 +129,11 @@ class ServletServerHttpResponse extends AbstractListenerServerHttpResponse {
 				this.response.addHeader(headerName, headerValue);
 			}
 		});
+
+		adaptHeaders(false);
+	}
+
+	protected void adaptHeaders(boolean removeAdaptedHeaders) {
 		MediaType contentType = null;
 		try {
 			contentType = getHeaders().getContentType();
@@ -138,26 +145,32 @@ class ServletServerHttpResponse extends AbstractListenerServerHttpResponse {
 		if (this.response.getContentType() == null && contentType != null) {
 			this.response.setContentType(contentType.toString());
 		}
+
 		Charset charset = (contentType != null ? contentType.getCharset() : null);
 		if (this.response.getCharacterEncoding() == null && charset != null) {
 			this.response.setCharacterEncoding(charset.name());
 		}
+
 		long contentLength = getHeaders().getContentLength();
 		if (contentLength != -1) {
 			this.response.setContentLengthLong(contentLength);
+		}
+
+		if (removeAdaptedHeaders) {
+			getHeaders().remove(HttpHeaders.CONTENT_TYPE);
+			getHeaders().remove(HttpHeaders.CONTENT_LENGTH);
 		}
 	}
 
 	@Override
 	protected void applyCookies() {
-
 		// Servlet Cookie doesn't support same site:
 		// https://github.com/eclipse-ee4j/servlet-api/issues/175
 
 		// For Jetty, starting 9.4.21+ we could adapt to HttpCookie:
 		// https://github.com/eclipse/jetty.project/issues/3040
 
-		// For Tomcat it seems to be a global option only:
+		// For Tomcat, it seems to be a global option only:
 		// https://tomcat.apache.org/tomcat-8.5-doc/config/cookie-processor.html
 
 		for (List<ResponseCookie> cookies : getCookies().values()) {
@@ -182,6 +195,13 @@ class ServletServerHttpResponse extends AbstractListenerServerHttpResponse {
 		ResponseBodyFlushProcessor processor = new ResponseBodyFlushProcessor();
 		this.bodyFlushProcessor = processor;
 		return processor;
+	}
+
+	/**
+	 * Return the {@link ServletOutputStream} for the current response.
+	 */
+	protected final ServletOutputStream getOutputStream() {
+		return this.outputStream;
 	}
 
 	/**

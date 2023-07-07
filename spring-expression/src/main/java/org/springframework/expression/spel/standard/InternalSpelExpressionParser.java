@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Pattern;
 
 import org.springframework.expression.ParseException;
 import org.springframework.expression.ParserContext;
 import org.springframework.expression.common.TemplateAwareExpressionParser;
 import org.springframework.expression.spel.InternalParseException;
+import org.springframework.expression.spel.SpelEvaluationException;
 import org.springframework.expression.spel.SpelMessage;
 import org.springframework.expression.spel.SpelParseException;
 import org.springframework.expression.spel.SpelParserConfiguration;
@@ -78,22 +81,25 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 /**
- * Hand-written SpEL parser. Instances are reusable but are not thread-safe.
+ * Handwritten SpEL parser. Instances are reusable but are not thread-safe.
  *
  * @author Andy Clement
  * @author Juergen Hoeller
  * @author Phillip Webb
+ * @author Sam Brannen
  * @since 3.0
  */
 class InternalSpelExpressionParser extends TemplateAwareExpressionParser {
 
 	private static final Pattern VALID_QUALIFIED_ID_PATTERN = Pattern.compile("[\\p{L}\\p{N}_$]+");
 
-
 	private final SpelParserConfiguration configuration;
 
 	// For rules that build nodes, they are stacked here for return
 	private final Deque<SpelNodeImpl> constructedNodes = new ArrayDeque<>();
+
+	// Shared cache for compiled regex patterns
+	private final ConcurrentMap<String, Pattern> patternCache = new ConcurrentHashMap<>();
 
 	// The expression being parsed
 	private String expressionString = "";
@@ -121,6 +127,8 @@ class InternalSpelExpressionParser extends TemplateAwareExpressionParser {
 	protected SpelExpression doParseExpression(String expressionString, @Nullable ParserContext context)
 			throws ParseException {
 
+		checkExpressionLength(expressionString);
+
 		try {
 			this.expressionString = expressionString;
 			Tokenizer tokenizer = new Tokenizer(expressionString);
@@ -139,6 +147,13 @@ class InternalSpelExpressionParser extends TemplateAwareExpressionParser {
 		}
 		catch (InternalParseException ex) {
 			throw ex.getCause();
+		}
+	}
+
+	private void checkExpressionLength(String string) {
+		int maxLength = this.configuration.getMaximumExpressionLength();
+		if (string.length() > maxLength) {
+			throw new SpelEvaluationException(SpelMessage.MAX_EXPRESSION_LENGTH_EXCEEDED, maxLength);
 		}
 	}
 
@@ -248,7 +263,7 @@ class InternalSpelExpressionParser extends TemplateAwareExpressionParser {
 			}
 
 			if (tk == TokenKind.MATCHES) {
-				return new OperatorMatches(t.startPos, t.endPos, expr, rhExpr);
+				return new OperatorMatches(this.patternCache, t.startPos, t.endPos, expr, rhExpr);
 			}
 
 			Assert.isTrue(tk == TokenKind.BETWEEN, "Between token expected");

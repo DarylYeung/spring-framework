@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import java.util.function.Function;
 
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.style.DefaultToStringStyler;
+import org.springframework.core.style.SimpleValueStyler;
 import org.springframework.core.style.ToStringCreator;
 import org.springframework.lang.Nullable;
 import org.springframework.test.annotation.DirtiesContext.HierarchyMode;
@@ -40,6 +42,7 @@ import org.springframework.util.StringUtils;
  * @author Rob Harrop
  * @since 4.0
  */
+@SuppressWarnings("serial")
 public class DefaultTestContext implements TestContext {
 
 	private static final long serialVersionUID = -5827157174866681233L;
@@ -48,7 +51,7 @@ public class DefaultTestContext implements TestContext {
 
 	private final CacheAwareContextLoaderDelegate cacheAwareContextLoaderDelegate;
 
-	private final MergedContextConfiguration mergedContextConfiguration;
+	private final MergedContextConfiguration mergedConfig;
 
 	private final Class<?> testClass;
 
@@ -72,7 +75,7 @@ public class DefaultTestContext implements TestContext {
 	 * is {@code null}
 	 */
 	public DefaultTestContext(DefaultTestContext testContext) {
-		this(testContext.testClass, testContext.mergedContextConfiguration,
+		this(testContext.testClass, testContext.mergedConfig,
 			testContext.cacheAwareContextLoaderDelegate);
 		this.attributes.putAll(testContext.attributes);
 	}
@@ -80,19 +83,19 @@ public class DefaultTestContext implements TestContext {
 	/**
 	 * Construct a new {@code DefaultTestContext} from the supplied arguments.
 	 * @param testClass the test class for this test context
-	 * @param mergedContextConfiguration the merged application context
+	 * @param mergedConfig the merged application context
 	 * configuration for this test context
 	 * @param cacheAwareContextLoaderDelegate the delegate to use for loading
 	 * and closing the application context for this test context
 	 */
-	public DefaultTestContext(Class<?> testClass, MergedContextConfiguration mergedContextConfiguration,
+	public DefaultTestContext(Class<?> testClass, MergedContextConfiguration mergedConfig,
 			CacheAwareContextLoaderDelegate cacheAwareContextLoaderDelegate) {
 
 		Assert.notNull(testClass, "Test Class must not be null");
-		Assert.notNull(mergedContextConfiguration, "MergedContextConfiguration must not be null");
+		Assert.notNull(mergedConfig, "MergedContextConfiguration must not be null");
 		Assert.notNull(cacheAwareContextLoaderDelegate, "CacheAwareContextLoaderDelegate must not be null");
 		this.testClass = testClass;
-		this.mergedContextConfiguration = mergedContextConfiguration;
+		this.mergedConfig = mergedConfig;
 		this.cacheAwareContextLoaderDelegate = cacheAwareContextLoaderDelegate;
 	}
 
@@ -107,7 +110,7 @@ public class DefaultTestContext implements TestContext {
 	 */
 	@Override
 	public boolean hasApplicationContext() {
-		return this.cacheAwareContextLoaderDelegate.isContextLoaded(this.mergedContextConfiguration);
+		return this.cacheAwareContextLoaderDelegate.isContextLoaded(this.mergedConfig);
 	}
 
 	/**
@@ -121,15 +124,16 @@ public class DefaultTestContext implements TestContext {
 	 */
 	@Override
 	public ApplicationContext getApplicationContext() {
-		ApplicationContext context = this.cacheAwareContextLoaderDelegate.loadContext(this.mergedContextConfiguration);
+		ApplicationContext context = this.cacheAwareContextLoaderDelegate.loadContext(this.mergedConfig);
 		if (context instanceof ConfigurableApplicationContext cac) {
-			Assert.state(cac.isActive(), () ->
-					"The ApplicationContext loaded for [" + this.mergedContextConfiguration +
-					"] is not active. This may be due to one of the following reasons: " +
-					"1) the context was closed programmatically by user code; " +
-					"2) the context was closed during parallel test execution either " +
-					"according to @DirtiesContext semantics or due to automatic eviction " +
-					"from the ContextCache due to a maximum cache size policy.");
+			Assert.state(cac.isActive(), () -> """
+					The ApplicationContext loaded for %s is not active. \
+					This may be due to one of the following reasons: \
+					1) the context was closed programmatically by user code; \
+					2) the context was closed during parallel test execution either \
+					according to @DirtiesContext semantics or due to automatic eviction \
+					from the ContextCache due to a maximum cache size policy."""
+						.formatted(this.mergedConfig));
 		}
 		return context;
 	}
@@ -144,7 +148,7 @@ public class DefaultTestContext implements TestContext {
 	 */
 	@Override
 	public void markApplicationContextDirty(@Nullable HierarchyMode hierarchyMode) {
-		this.cacheAwareContextLoaderDelegate.closeContext(this.mergedContextConfiguration, hierarchyMode);
+		this.cacheAwareContextLoaderDelegate.closeContext(this.mergedConfig, hierarchyMode);
 	}
 
 	@Override
@@ -206,7 +210,7 @@ public class DefaultTestContext implements TestContext {
 		Assert.notNull(computeFunction, "Compute function must not be null");
 		Object value = this.attributes.computeIfAbsent(name, computeFunction);
 		Assert.state(value != null,
-				() -> String.format("Compute function must not return null for attribute named '%s'", name));
+				() -> "Compute function must not return null for attribute named '%s'".formatted(name));
 		return (T) value;
 	}
 
@@ -236,12 +240,12 @@ public class DefaultTestContext implements TestContext {
 	 */
 	@Override
 	public String toString() {
-		return new ToStringCreator(this)
+		return new ToStringCreator(this, new DefaultToStringStyler(new SimpleValueStyler()))
 				.append("testClass", this.testClass)
 				.append("testInstance", this.testInstance)
 				.append("testMethod", this.testMethod)
 				.append("testException", this.testException)
-				.append("mergedContextConfiguration", this.mergedContextConfiguration)
+				.append("mergedContextConfiguration", this.mergedConfig)
 				.append("attributes", this.attributes)
 				.toString();
 	}

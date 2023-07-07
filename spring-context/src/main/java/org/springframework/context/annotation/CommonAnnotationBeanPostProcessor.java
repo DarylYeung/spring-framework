@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.springframework.context.annotation;
 
-import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
@@ -306,14 +305,6 @@ public class CommonAnnotationBeanPostProcessor extends InitDestroyAnnotationBean
 		return pvs;
 	}
 
-	@Deprecated
-	@Override
-	public PropertyValues postProcessPropertyValues(
-			PropertyValues pvs, PropertyDescriptor[] pds, Object bean, String beanName) {
-
-		return postProcessProperties(pvs, bean, beanName);
-	}
-
 
 	private InjectionMetadata findResourceMetadata(String beanName, Class<?> clazz, @Nullable PropertyValues pvs) {
 		// Fall back to class name as cache key, for backwards compatibility with custom callers.
@@ -600,7 +591,7 @@ public class CommonAnnotationBeanPostProcessor extends InitDestroyAnnotationBean
 			if (this.isDefaultName) {
 				resourceName = this.member.getName();
 				if (this.member instanceof Method && resourceName.startsWith("set") && resourceName.length() > 3) {
-					resourceName = Introspector.decapitalize(resourceName.substring(3));
+					resourceName = StringUtils.uncapitalizeAsProperty(resourceName.substring(3));
 				}
 			}
 			else if (embeddedValueResolver != null) {
@@ -646,7 +637,7 @@ public class CommonAnnotationBeanPostProcessor extends InitDestroyAnnotationBean
 			if (this.isDefaultName) {
 				resourceName = this.member.getName();
 				if (this.member instanceof Method && resourceName.startsWith("set") && resourceName.length() > 3) {
-					resourceName = Introspector.decapitalize(resourceName.substring(3));
+					resourceName = StringUtils.uncapitalizeAsProperty(resourceName.substring(3));
 				}
 			}
 			Class<?> resourceType = resource.beanInterface();

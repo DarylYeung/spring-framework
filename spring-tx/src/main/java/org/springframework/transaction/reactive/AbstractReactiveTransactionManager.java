@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,9 +95,7 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @see #doBegin
 	 */
 	@Override
-	public final Mono<ReactiveTransaction> getReactiveTransaction(@Nullable TransactionDefinition definition)
-			throws TransactionException {
-
+	public final Mono<ReactiveTransaction> getReactiveTransaction(@Nullable TransactionDefinition definition) {
 		// Use defaults if no transaction definition given.
 		TransactionDefinition def = (definition != null ? definition : TransactionDefinition.withDefaults());
 
@@ -165,7 +163,7 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * Create a ReactiveTransaction for an existing transaction.
 	 */
 	private Mono<ReactiveTransaction> handleExistingTransaction(TransactionSynchronizationManager synchronizationManager,
-			TransactionDefinition definition, Object transaction, boolean debugEnabled) throws TransactionException {
+			TransactionDefinition definition, Object transaction, boolean debugEnabled) {
 
 		if (definition.getPropagationBehavior() == TransactionDefinition.PROPAGATION_NEVER) {
 			return Mono.error(new IllegalTransactionStateException(
@@ -277,7 +275,7 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @see #resume
 	 */
 	private Mono<SuspendedResourcesHolder> suspend(TransactionSynchronizationManager synchronizationManager,
-			@Nullable Object transaction) throws TransactionException {
+			@Nullable Object transaction) {
 
 		if (synchronizationManager.isSynchronizationActive()) {
 			Mono<List<TransactionSynchronization>> suspendedSynchronizations = doSuspendSynchronization(synchronizationManager);
@@ -325,8 +323,7 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @see #suspend
 	 */
 	private Mono<Void> resume(TransactionSynchronizationManager synchronizationManager,
-			@Nullable Object transaction, @Nullable SuspendedResourcesHolder resourcesHolder)
-			throws TransactionException {
+			@Nullable Object transaction, @Nullable SuspendedResourcesHolder resourcesHolder) {
 
 		Mono<Void> resume = Mono.empty();
 
@@ -403,7 +400,7 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @see #rollback
 	 */
 	@Override
-	public final Mono<Void> commit(ReactiveTransaction transaction) throws TransactionException {
+	public final Mono<Void> commit(ReactiveTransaction transaction) {
 		if (transaction.isCompleted()) {
 			return Mono.error(new IllegalTransactionStateException(
 					"Transaction is already completed - do not call commit or rollback more than once per transaction"));
@@ -426,14 +423,13 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * Rollback-only flags have already been checked and applied.
 	 * @param synchronizationManager the synchronization manager bound to the current transaction
 	 * @param status object representing the transaction
-	 * @throws TransactionException in case of commit failure
 	 */
 	private Mono<Void> processCommit(TransactionSynchronizationManager synchronizationManager,
-			GenericReactiveTransaction status) throws TransactionException {
+			GenericReactiveTransaction status) {
 
 		AtomicBoolean beforeCompletionInvoked = new AtomicBoolean();
 
-		Mono<Object> commit = prepareForCommit(synchronizationManager, status)
+		Mono<Void> commit = prepareForCommit(synchronizationManager, status)
 				.then(triggerBeforeCommit(synchronizationManager, status))
 				.then(triggerBeforeCompletion(synchronizationManager, status))
 				.then(Mono.defer(() -> {
@@ -445,11 +441,12 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 						return doCommit(synchronizationManager, status);
 					}
 					return Mono.empty();
-				})).then(Mono.empty().onErrorResume(ex -> {
-					Mono<Object> propagateException = Mono.error(ex);
+				}))
+				.onErrorResume(ex -> {
+					Mono<Void> propagateException = Mono.error(ex);
 					// Store result in a local variable in order to appease the
 					// Eclipse compiler with regard to inferred generics.
-					Mono<Object> result = propagateException;
+					Mono<Void> result = propagateException;
 					if (ErrorPredicates.UNEXPECTED_ROLLBACK.test(ex)) {
 						result = triggerAfterCompletion(synchronizationManager, status, TransactionSynchronization.STATUS_ROLLED_BACK)
 								.then(propagateException);
@@ -471,7 +468,8 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 					}
 
 					return result;
-				})).then(Mono.defer(() -> triggerAfterCommit(synchronizationManager, status).onErrorResume(ex ->
+				})
+				.then(Mono.defer(() -> triggerAfterCommit(synchronizationManager, status).onErrorResume(ex ->
 						triggerAfterCompletion(synchronizationManager, status, TransactionSynchronization.STATUS_COMMITTED).then(Mono.error(ex)))
 						.then(triggerAfterCompletion(synchronizationManager, status, TransactionSynchronization.STATUS_COMMITTED))));
 
@@ -487,7 +485,7 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @see #doSetRollbackOnly
 	 */
 	@Override
-	public final Mono<Void> rollback(ReactiveTransaction transaction) throws TransactionException {
+	public final Mono<Void> rollback(ReactiveTransaction transaction) {
 		if (transaction.isCompleted()) {
 			return Mono.error(new IllegalTransactionStateException(
 					"Transaction is already completed - do not call commit or rollback more than once per transaction"));
@@ -503,7 +501,6 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * The completed flag has already been checked.
 	 * @param synchronizationManager the synchronization manager bound to the current transaction
 	 * @param status object representing the transaction
-	 * @throws TransactionException in case of rollback failure
 	 */
 	private Mono<Void> processRollback(TransactionSynchronizationManager synchronizationManager,
 			GenericReactiveTransaction status) {
@@ -542,11 +539,10 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @param synchronizationManager the synchronization manager bound to the current transaction
 	 * @param status object representing the transaction
 	 * @param ex the thrown application exception or error
-	 * @throws TransactionException in case of rollback failure
 	 * @see #doRollback
 	 */
 	private Mono<Void> doRollbackOnCommitException(TransactionSynchronizationManager synchronizationManager,
-			GenericReactiveTransaction status, Throwable ex) throws TransactionException {
+			GenericReactiveTransaction status, Throwable ex) {
 
 		return Mono.defer(() -> {
 			if (status.isNewTransaction()) {
@@ -632,7 +628,7 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 			}
 			else if (!synchronizations.isEmpty()) {
 				// Existing transaction that we participate in, controlled outside
-				// of the scope of this Spring transaction manager -> try to register
+				// the scope of this Spring transaction manager -> try to register
 				// an afterCompletion callback with the existing (JTA) transaction.
 				return registerAfterCompletionWithExistingTransaction(
 						synchronizationManager, status.getTransaction(), synchronizations);
@@ -714,14 +710,12 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @return the current transaction object
 	 * @throws org.springframework.transaction.CannotCreateTransactionException
 	 * if transaction support is not available
-	 * @throws TransactionException in case of lookup or system errors
 	 * @see #doBegin
 	 * @see #doCommit
 	 * @see #doRollback
 	 * @see GenericReactiveTransaction#getTransaction
 	 */
-	protected abstract Object doGetTransaction(TransactionSynchronizationManager synchronizationManager)
-			throws TransactionException;
+	protected abstract Object doGetTransaction(TransactionSynchronizationManager synchronizationManager);
 
 	/**
 	 * Check if the given transaction object indicates an existing transaction
@@ -735,10 +729,9 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * Subclasses are of course encouraged to provide such support.
 	 * @param transaction the transaction object returned by doGetTransaction
 	 * @return if there is an existing transaction
-	 * @throws TransactionException in case of system errors
 	 * @see #doGetTransaction
 	 */
-	protected boolean isExistingTransaction(Object transaction) throws TransactionException {
+	protected boolean isExistingTransaction(Object transaction) {
 		return false;
 	}
 
@@ -757,12 +750,11 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @param transaction the transaction object returned by {@code doGetTransaction}
 	 * @param definition a TransactionDefinition instance, describing propagation
 	 * behavior, isolation level, read-only flag, timeout, and transaction name
-	 * @throws TransactionException in case of creation or system errors
 	 * @throws org.springframework.transaction.NestedTransactionNotSupportedException
 	 * if the underlying transaction does not support nesting (e.g. through savepoints)
 	 */
 	protected abstract Mono<Void> doBegin(TransactionSynchronizationManager synchronizationManager,
-			Object transaction, TransactionDefinition definition) throws TransactionException;
+			Object transaction, TransactionDefinition definition);
 
 	/**
 	 * Suspend the resources of the current transaction.
@@ -775,11 +767,10 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * (will be kept unexamined for passing it into doResume)
 	 * @throws org.springframework.transaction.TransactionSuspensionNotSupportedException
 	 * if suspending is not supported by the transaction manager implementation
-	 * @throws TransactionException in case of system errors
 	 * @see #doResume
 	 */
 	protected Mono<Object> doSuspend(TransactionSynchronizationManager synchronizationManager,
-			Object transaction) throws TransactionException {
+			Object transaction) {
 
 		throw new TransactionSuspensionNotSupportedException(
 				"Transaction manager [" + getClass().getName() + "] does not support transaction suspension");
@@ -796,11 +787,10 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * as returned by doSuspend
 	 * @throws org.springframework.transaction.TransactionSuspensionNotSupportedException
 	 * if suspending is not supported by the transaction manager implementation
-	 * @throws TransactionException in case of system errors
 	 * @see #doSuspend
 	 */
 	protected Mono<Void> doResume(TransactionSynchronizationManager synchronizationManager,
-			@Nullable Object transaction, Object suspendedResources) throws TransactionException {
+			@Nullable Object transaction, Object suspendedResources) {
 
 		throw new TransactionSuspensionNotSupportedException(
 				"Transaction manager [" + getClass().getName() + "] does not support transaction suspension");
@@ -830,11 +820,10 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * contained in the passed-in status.
 	 * @param synchronizationManager the synchronization manager bound to the current transaction
 	 * @param status the status representation of the transaction
-	 * @throws TransactionException in case of commit or system errors
 	 * @see GenericReactiveTransaction#getTransaction
 	 */
 	protected abstract Mono<Void> doCommit(TransactionSynchronizationManager synchronizationManager,
-			GenericReactiveTransaction status) throws TransactionException;
+			GenericReactiveTransaction status);
 
 	/**
 	 * Perform an actual rollback of the given transaction.
@@ -843,11 +832,10 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * will be performed on the transaction object contained in the passed-in status.
 	 * @param synchronizationManager the synchronization manager bound to the current transaction
 	 * @param status the status representation of the transaction
-	 * @throws TransactionException in case of system errors
 	 * @see GenericReactiveTransaction#getTransaction
 	 */
 	protected abstract Mono<Void> doRollback(TransactionSynchronizationManager synchronizationManager,
-			GenericReactiveTransaction status) throws TransactionException;
+			GenericReactiveTransaction status);
 
 	/**
 	 * Set the given transaction rollback-only. Only called on rollback
@@ -857,10 +845,9 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * supported. Subclasses are of course encouraged to provide such support.
 	 * @param synchronizationManager the synchronization manager bound to the current transaction
 	 * @param status the status representation of the transaction
-	 * @throws TransactionException in case of system errors
 	 */
 	protected Mono<Void> doSetRollbackOnly(TransactionSynchronizationManager synchronizationManager,
-			GenericReactiveTransaction status) throws TransactionException {
+			GenericReactiveTransaction status) {
 
 		throw new IllegalTransactionStateException(
 				"Participating in existing transactions is not supported - when 'isExistingTransaction' " +
@@ -878,13 +865,12 @@ public abstract class AbstractReactiveTransactionManager implements ReactiveTran
 	 * @param synchronizationManager the synchronization manager bound to the current transaction
 	 * @param transaction the transaction object returned by {@code doGetTransaction}
 	 * @param synchronizations a List of TransactionSynchronization objects
-	 * @throws TransactionException in case of system errors
 	 * @see #invokeAfterCompletion(TransactionSynchronizationManager, List, int)
 	 * @see TransactionSynchronization#afterCompletion(int)
 	 * @see TransactionSynchronization#STATUS_UNKNOWN
 	 */
 	protected Mono<Void> registerAfterCompletionWithExistingTransaction(TransactionSynchronizationManager synchronizationManager,
-			Object transaction, List<TransactionSynchronization> synchronizations) throws TransactionException {
+			Object transaction, List<TransactionSynchronization> synchronizations) {
 
 		logger.debug("Cannot register Spring after-completion synchronization with existing transaction - " +
 				"processing Spring after-completion callbacks immediately, with outcome status 'unknown'");

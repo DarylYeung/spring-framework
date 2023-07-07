@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -39,6 +37,7 @@ import org.springframework.core.ResolvableType;
 import org.springframework.core.codec.Hints;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.core.log.LogFormatUtils;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -58,6 +57,7 @@ import org.springframework.web.server.MethodNotAllowedException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebHandler;
+import org.springframework.web.util.pattern.PathPattern;
 
 /**
  * {@code HttpRequestHandler} that serves static resources in an optimized way
@@ -90,7 +90,7 @@ import org.springframework.web.server.WebHandler;
  */
 public class ResourceWebHandler implements WebHandler, InitializingBean {
 
-	private static final Set<HttpMethod> SUPPORTED_METHODS = EnumSet.of(HttpMethod.GET, HttpMethod.HEAD);
+	private static final Set<HttpMethod> SUPPORTED_METHODS = Set.of(HttpMethod.GET, HttpMethod.HEAD);
 
 	private static final Log logger = LogFactory.getLog(ResourceWebHandler.class);
 
@@ -359,7 +359,7 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 		}
 
 		if (isOptimizeLocations()) {
-			result = result.stream().filter(Resource::exists).collect(Collectors.toList());
+			result = result.stream().filter(Resource::exists).toList();
 		}
 
 		this.locationsToUse.clear();
@@ -407,7 +407,7 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 				}))
 				.flatMap(resource -> {
 					try {
-						if (HttpMethod.OPTIONS.matches(exchange.getRequest().getMethodValue())) {
+						if (HttpMethod.OPTIONS.equals(exchange.getRequest().getMethod())) {
 							exchange.getResponse().getHeaders().add("Allow", "GET,HEAD,OPTIONS");
 							return Mono.empty();
 						}
@@ -416,7 +416,7 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 						HttpMethod httpMethod = exchange.getRequest().getMethod();
 						if (!SUPPORTED_METHODS.contains(httpMethod)) {
 							return Mono.error(new MethodNotAllowedException(
-									exchange.getRequest().getMethodValue(), SUPPORTED_METHODS));
+									exchange.getRequest().getMethod(), SUPPORTED_METHODS));
 						}
 
 						// Header phase
@@ -438,10 +438,17 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 						// Content phase
 						ResourceHttpMessageWriter writer = getResourceHttpMessageWriter();
 						Assert.state(writer != null, "No ResourceHttpMessageWriter");
-						return writer.write(Mono.just(resource),
-								null, ResolvableType.forClass(Resource.class), mediaType,
-								exchange.getRequest(), exchange.getResponse(),
-								Hints.from(Hints.LOG_PREFIX_HINT, exchange.getLogPrefix()));
+						if (HttpMethod.HEAD == httpMethod) {
+							writer.addHeaders(exchange.getResponse(), resource, mediaType,
+									Hints.from(Hints.LOG_PREFIX_HINT, exchange.getLogPrefix()));
+							return exchange.getResponse().setComplete();
+						}
+						else {
+							return writer.write(Mono.just(resource),
+									null, ResolvableType.forClass(Resource.class), mediaType,
+									exchange.getRequest(), exchange.getResponse(),
+									Hints.from(Hints.LOG_PREFIX_HINT, exchange.getLogPrefix()));
+						}
 					}
 					catch (IOException ex) {
 						return Mono.error(ex);
@@ -450,10 +457,8 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 	}
 
 	protected Mono<Resource> getResource(ServerWebExchange exchange) {
-		String name = HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE;
-		PathContainer pathWithinHandler = exchange.getRequiredAttribute(name);
-
-		String path = processPath(pathWithinHandler.value());
+		String rawPath = getResourcePath(exchange);
+		String path = processPath(rawPath);
 		if (!StringUtils.hasText(path) || isInvalidPath(path)) {
 			return Mono.empty();
 		}
@@ -468,6 +473,15 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 				.flatMap(resource -> this.transformerChain.transform(exchange, resource));
 	}
 
+	private String getResourcePath(ServerWebExchange exchange) {
+		PathPattern pattern = exchange.getRequiredAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+		if (!pattern.hasPatternSyntax()) {
+			return pattern.getPatternString();
+		}
+		PathContainer pathWithinHandler = exchange.getRequiredAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+		return pathWithinHandler.value();
+	}
+
 	/**
 	 * Process the given resource path.
 	 * <p>The default implementation replaces:
@@ -478,7 +492,6 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 	 * with a single "/" or "". For example {@code "  / // foo/bar"}
 	 * becomes {@code "/foo/bar"}.
 	 * </ul>
-	 * @since 3.2.12
 	 */
 	protected String processPath(String path) {
 		path = StringUtils.replace(path, "\\", "/");
@@ -568,7 +581,8 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 	protected boolean isInvalidPath(String path) {
 		if (path.contains("WEB-INF") || path.contains("META-INF")) {
 			if (logger.isWarnEnabled()) {
-				logger.warn("Path with \"WEB-INF\" or \"META-INF\": [" + path + "]");
+				logger.warn(LogFormatUtils.formatValue(
+						"Path with \"WEB-INF\" or \"META-INF\": [" + path + "]", -1, true));
 			}
 			return true;
 		}
@@ -576,14 +590,16 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 			String relativePath = (path.charAt(0) == '/' ? path.substring(1) : path);
 			if (ResourceUtils.isUrl(relativePath) || relativePath.startsWith("url:")) {
 				if (logger.isWarnEnabled()) {
-					logger.warn("Path represents URL or has \"url:\" prefix: [" + path + "]");
+					logger.warn(LogFormatUtils.formatValue(
+							"Path represents URL or has \"url:\" prefix: [" + path + "]", -1, true));
 				}
 				return true;
 			}
 		}
 		if (path.contains("..") && StringUtils.cleanPath(path).contains("../")) {
 			if (logger.isWarnEnabled()) {
-				logger.warn("Path contains \"../\" after call to StringUtils#cleanPath: [" + path + "]");
+				logger.warn(LogFormatUtils.formatValue(
+						"Path contains \"../\" after call to StringUtils#cleanPath: [" + path + "]", -1, true));
 			}
 			return true;
 		}

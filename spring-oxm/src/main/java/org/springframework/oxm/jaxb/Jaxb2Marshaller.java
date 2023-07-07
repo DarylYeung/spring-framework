@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,9 @@ import javax.xml.XMLConstants;
 import javax.xml.datatype.Duration;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
 import javax.xml.stream.XMLEventReader;
 import javax.xml.stream.XMLEventWriter;
 import javax.xml.stream.XMLStreamReader;
@@ -98,6 +101,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.util.ObjectUtils;
+import org.springframework.util.ResourceUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.util.xml.StaxUtils;
 
@@ -575,8 +579,7 @@ public class Jaxb2Marshaller implements MimeMarshaller, MimeUnmarshaller, Generi
 		}
 	}
 
-	@SuppressWarnings("deprecation")
-	private Schema loadSchema(Resource[] resources, String schemaLanguage) throws IOException, SAXException {
+	private Schema loadSchema(Resource[] resources, String schemaLanguage) throws IOException, SAXException, ParserConfigurationException {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Setting validation schema to " +
 					StringUtils.arrayToCommaDelimitedString(this.schemaResources));
@@ -584,8 +587,11 @@ public class Jaxb2Marshaller implements MimeMarshaller, MimeUnmarshaller, Generi
 		Assert.notEmpty(resources, "No resources given");
 		Assert.hasLength(schemaLanguage, "No schema language provided");
 		Source[] schemaSources = new Source[resources.length];
-		XMLReader xmlReader = org.xml.sax.helpers.XMLReaderFactory.createXMLReader();
-		xmlReader.setFeature("http://xml.org/sax/features/namespace-prefixes", true);
+		SAXParserFactory saxParserFactory = SAXParserFactory.newInstance();
+		saxParserFactory.setNamespaceAware(true);
+		saxParserFactory.setFeature("http://xml.org/sax/features/namespace-prefixes", true);
+		SAXParser saxParser = saxParserFactory.newSAXParser();
+		XMLReader xmlReader = saxParser.getXMLReader();
 		for (int i = 0; i < resources.length; i++) {
 			Resource resource = resources[i];
 			Assert.isTrue(resource != null && resource.exists(), () -> "Resource does not exist: " + resource);
@@ -854,7 +860,6 @@ public class Jaxb2Marshaller implements MimeMarshaller, MimeUnmarshaller, Generi
 		}
 	}
 
-	@SuppressWarnings("deprecation")
 	private Source processSource(Source source) {
 		if (StaxUtils.isStaxSource(source) || source instanceof DOMSource) {
 			return source;
@@ -881,17 +886,20 @@ public class Jaxb2Marshaller implements MimeMarshaller, MimeUnmarshaller, Generi
 
 		try {
 			if (xmlReader == null) {
-				xmlReader = org.xml.sax.helpers.XMLReaderFactory.createXMLReader();
+				SAXParserFactory saxParserFactory = SAXParserFactory.newInstance();
+				saxParserFactory.setNamespaceAware(true);
+				saxParserFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", !isSupportDtd());
+				String name = "http://xml.org/sax/features/external-general-entities";
+				saxParserFactory.setFeature(name, isProcessExternalEntities());
+				SAXParser saxParser = saxParserFactory.newSAXParser();
+				xmlReader = saxParser.getXMLReader();
 			}
-			xmlReader.setFeature("http://apache.org/xml/features/disallow-doctype-decl", !isSupportDtd());
-			String name = "http://xml.org/sax/features/external-general-entities";
-			xmlReader.setFeature(name, isProcessExternalEntities());
 			if (!isProcessExternalEntities()) {
 				xmlReader.setEntityResolver(NO_OP_ENTITY_RESOLVER);
 			}
 			return new SAXSource(xmlReader, inputSource);
 		}
-		catch (SAXException ex) {
+		catch (SAXException | ParserConfigurationException ex) {
 			logger.info("Processing of external entities could not be disabled", ex);
 			return source;
 		}
@@ -978,7 +986,7 @@ public class Jaxb2Marshaller implements MimeMarshaller, MimeUnmarshaller, Generi
 
 		private String getHost(String elementNamespace, DataHandler dataHandler) {
 			try {
-				URI uri = new URI(elementNamespace);
+				URI uri = ResourceUtils.toURI(elementNamespace);
 				return uri.getHost();
 			}
 			catch (URISyntaxException ex) {

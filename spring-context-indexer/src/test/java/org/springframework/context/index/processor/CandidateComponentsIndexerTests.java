@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,13 +82,13 @@ class CandidateComponentsIndexerTests {
 	@Test
 	void noCandidate() {
 		CandidateComponentsMetadata metadata = compile(SampleNone.class);
-		assertThat(metadata.getItems()).hasSize(0);
+		assertThat(metadata.getItems()).isEmpty();
 	}
 
 	@Test
 	void noAnnotation() {
 		CandidateComponentsMetadata metadata = compile(CandidateComponentsIndexerTests.class);
-		assertThat(metadata.getItems()).hasSize(0);
+		assertThat(metadata.getItems()).isEmpty();
 	}
 
 	@Test
@@ -214,7 +214,7 @@ class CandidateComponentsIndexerTests {
 	@Test
 	void embeddedNonStaticCandidateAreIgnored() {
 		CandidateComponentsMetadata metadata = compile(SampleNonStaticEmbedded.class);
-		assertThat(metadata.getItems()).hasSize(0);
+		assertThat(metadata.getItems()).isEmpty();
 	}
 
 	private void testComponent(Class<?>... classes) {
@@ -222,7 +222,7 @@ class CandidateComponentsIndexerTests {
 		for (Class<?> c : classes) {
 			assertThat(metadata).has(Metadata.of(c, Component.class));
 		}
-		assertThat(metadata.getItems()).hasSize(classes.length);
+		assertThat(metadata.getItems()).hasSameSizeAs(classes);
 	}
 
 	private void testSingleComponent(Class<?> target, Class<?>... stereotypes) {
@@ -231,12 +231,14 @@ class CandidateComponentsIndexerTests {
 		assertThat(metadata.getItems()).hasSize(1);
 	}
 
+	@SuppressWarnings("removal")
 	private CandidateComponentsMetadata compile(Class<?>... types) {
 		CandidateComponentsIndexer processor = new CandidateComponentsIndexer();
 		this.compiler.getTask(types).call(processor);
 		return readGeneratedMetadata(this.compiler.getOutputLocation());
 	}
 
+	@SuppressWarnings("removal")
 	private CandidateComponentsMetadata compile(String... types) {
 		CandidateComponentsIndexer processor = new CandidateComponentsIndexer();
 		this.compiler.getTask(types).call(processor);

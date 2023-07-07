@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Method;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.text.SimpleDateFormat;
@@ -71,6 +70,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.beans.propertyeditors.CustomDateEditor;
+import org.springframework.beans.propertyeditors.StringTrimmerEditor;
 import org.springframework.beans.testfixture.beans.DerivedTestBean;
 import org.springframework.beans.testfixture.beans.GenericBean;
 import org.springframework.beans.testfixture.beans.ITestBean;
@@ -170,7 +170,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author Juergen Hoeller
  * @author Sam Brannen
  */
-public class ServletAnnotationControllerHandlerMethodTests extends AbstractServletHandlerMethodTests {
+class ServletAnnotationControllerHandlerMethodTests extends AbstractServletHandlerMethodTests {
 
 	static Stream<Boolean> pathPatternsArguments() {
 		return Stream.of(true, false);
@@ -178,19 +178,44 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 
 	@PathPatternsParameterizedTest
 	void emptyValueMapping(boolean usePathPatterns) throws Exception {
-		initDispatcherServlet(ControllerWithEmptyValueMapping.class, usePathPatterns);
+		initDispatcherServlet(ControllerWithEmptyValueMapping.class, usePathPatterns, wac -> {
+			if (!usePathPatterns) {
+				// UrlPathHelper returns "/" for "",
+				// so either the mapping has to be "/" or trailingSlashMatch must be on
+				RootBeanDefinition mappingDef = new RootBeanDefinition(RequestMappingHandlerMapping.class);
+				mappingDef.getPropertyValues().add("useTrailingSlashMatch", true);
+				wac.registerBeanDefinition("handlerMapping", mappingDef);
+			}
+		});
 
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/foo");
 		request.setContextPath("/foo");
 		request.setServletPath("");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		getServlet().service(request, response);
+
 		assertThat(response.getContentAsString()).isEqualTo("test");
+
+		// gh-30293
+		request = new MockHttpServletRequest("GET", "/");
+		response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+
+		assertThat(response.getContentAsString()).isEqualTo("test");
+
 	}
 
 	@PathPatternsParameterizedTest
 	void errorThrownFromHandlerMethod(boolean usePathPatterns) throws Exception {
-		initDispatcherServlet(ControllerWithErrorThrown.class, usePathPatterns);
+		initDispatcherServlet(ControllerWithErrorThrown.class, usePathPatterns, wac -> {
+			if (!usePathPatterns) {
+				// UrlPathHelper returns "/" for "",
+				// so either the mapping has to be "/" or trailingSlashMatch must be on
+				RootBeanDefinition mappingDef = new RootBeanDefinition(RequestMappingHandlerMapping.class);
+				mappingDef.getPropertyValues().add("useTrailingSlashMatch", true);
+				wac.registerBeanDefinition("handlerMapping", mappingDef);
+			}
+		});
 
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/foo");
 		request.setContextPath("/foo");
@@ -335,12 +360,12 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(allowHeader).as("No Allow header").isNotNull();
 		Set<String> allowedMethods = new HashSet<>(Arrays.asList(StringUtils.delimitedListToStringArray(allowHeader, ", ")));
 		assertThat(allowedMethods.size()).as("Invalid amount of supported methods").isEqualTo(6);
-		assertThat(allowedMethods.contains("PUT")).as("PUT not allowed").isTrue();
-		assertThat(allowedMethods.contains("DELETE")).as("DELETE not allowed").isTrue();
-		assertThat(allowedMethods.contains("HEAD")).as("HEAD not allowed").isTrue();
-		assertThat(allowedMethods.contains("TRACE")).as("TRACE not allowed").isTrue();
-		assertThat(allowedMethods.contains("OPTIONS")).as("OPTIONS not allowed").isTrue();
-		assertThat(allowedMethods.contains("POST")).as("POST not allowed").isTrue();
+		assertThat(allowedMethods).as("PUT not allowed").contains("PUT");
+		assertThat(allowedMethods).as("DELETE not allowed").contains("DELETE");
+		assertThat(allowedMethods).as("HEAD not allowed").contains("HEAD");
+		assertThat(allowedMethods).as("TRACE not allowed").contains("TRACE");
+		assertThat(allowedMethods).as("OPTIONS not allowed").contains("OPTIONS");
+		assertThat(allowedMethods).as("POST not allowed").contains("POST");
 	}
 
 	@PathPatternsParameterizedTest
@@ -357,10 +382,10 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		EmptyParameterListHandlerMethodController.called = false;
 		getServlet().service(request, response);
 		assertThat(EmptyParameterListHandlerMethodController.called).isTrue();
-		assertThat(response.getContentAsString()).isEqualTo("");
+		assertThat(response.getContentAsString()).isEmpty();
 	}
 
-	@SuppressWarnings("rawtypes")
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@PathPatternsParameterizedTest
 	void sessionAttributeExposure(boolean usePathPatterns) throws Exception {
 		initDispatcherServlet(
@@ -374,23 +399,23 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(request.getAttribute("viewName")).isEqualTo("page1");
 		HttpSession session = request.getSession();
 		assertThat(session).isNotNull();
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
 
 		request = new MockHttpServletRequest("POST", "/myPage");
 		request.setSession(session);
 		response = new MockHttpServletResponse();
 		getServlet().service(request, response);
 		assertThat(request.getAttribute("viewName")).isEqualTo("page2");
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
 	}
 
-	@SuppressWarnings("rawtypes")
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@PathPatternsParameterizedTest
 	void sessionAttributeExposureWithInterface(boolean usePathPatterns) throws Exception {
 		initDispatcherServlet(MySessionAttributesControllerImpl.class, usePathPatterns, wac -> {
@@ -407,23 +432,23 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(request.getAttribute("viewName")).isEqualTo("page1");
 		HttpSession session = request.getSession();
 		assertThat(session).isNotNull();
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
 
 		request = new MockHttpServletRequest("POST", "/myPage");
 		request.setSession(session);
 		response = new MockHttpServletResponse();
 		getServlet().service(request, response);
 		assertThat(request.getAttribute("viewName")).isEqualTo("page2");
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
 	}
 
-	@SuppressWarnings("rawtypes")
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@PathPatternsParameterizedTest
 	void parameterizedAnnotatedInterface(boolean usePathPatterns) throws Exception {
 		initDispatcherServlet(
@@ -437,25 +462,25 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(request.getAttribute("viewName")).isEqualTo("page1");
 		HttpSession session = request.getSession();
 		assertThat(session).isNotNull();
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("testBeanList")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("testBeanList");
 
 		request = new MockHttpServletRequest("POST", "/myPage");
 		request.setSession(session);
 		response = new MockHttpServletResponse();
 		getServlet().service(request, response);
 		assertThat(request.getAttribute("viewName")).isEqualTo("page2");
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("testBeanList")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("testBeanList");
 	}
 
-	@SuppressWarnings("rawtypes")
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@PathPatternsParameterizedTest
 	void parameterizedAnnotatedInterfaceWithOverriddenMappingsInImpl(boolean usePathPatterns) throws Exception {
 		initDispatcherServlet(
@@ -469,22 +494,22 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(request.getAttribute("viewName")).isEqualTo("page1");
 		HttpSession session = request.getSession();
 		assertThat(session).isNotNull();
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("testBeanList")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("testBeanList");
 
 		request = new MockHttpServletRequest("POST", "/myPage");
 		request.setSession(session);
 		response = new MockHttpServletResponse();
 		getServlet().service(request, response);
 		assertThat(request.getAttribute("viewName")).isEqualTo("page2");
-		assertThat(session.getAttribute("object1") != null).isTrue();
-		assertThat(session.getAttribute("object2") != null).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object1")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("object2")).isTrue();
-		assertThat(((Map) session.getAttribute("model")).containsKey("testBeanList")).isTrue();
+		assertThat(session.getAttribute("object1")).isNotNull();
+		assertThat(session.getAttribute("object2")).isNotNull();
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object1");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("object2");
+		assertThat(((Map) session.getAttribute("model"))).containsKey("testBeanList");
 	}
 
 	@PathPatternsParameterizedTest
@@ -1896,6 +1921,18 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(response.getForwardedUrl()).isEqualTo("view");
 	}
 
+	@PathPatternsParameterizedTest
+	void modelAndViewWithStatusForRedirect(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(ModelAndViewController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/redirect");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+
+		assertThat(response.getStatus()).isEqualTo(307);
+		assertThat(response.getRedirectedUrl()).isEqualTo("/path");
+	}
+
 	@PathPatternsParameterizedTest // SPR-14796
 	void modelAndViewWithStatusInExceptionHandler(boolean usePathPatterns) throws Exception {
 		initDispatcherServlet(ModelAndViewController.class, usePathPatterns);
@@ -1919,7 +1956,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(response.getStatus()).isEqualTo(200);
 		assertThat(response.getHeader("MyResponseHeader")).isEqualTo("MyValue");
 		assertThat(response.getContentLength()).isEqualTo(4);
-		assertThat(response.getContentAsByteArray().length == 0).isTrue();
+		assertThat(response.getContentAsByteArray().length).isEqualTo(0);
 
 		// Now repeat with GET
 		request = new MockHttpServletRequest("GET", "/baz");
@@ -1954,7 +1991,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 
 		assertThat(response.getStatus()).isEqualTo(200);
 		assertThat(response.getHeader("Allow")).isEqualTo("GET,HEAD,OPTIONS");
-		assertThat(response.getContentAsByteArray().length == 0).isTrue();
+		assertThat(response.getContentAsByteArray().length).isEqualTo(0);
 	}
 
 	@PathPatternsParameterizedTest
@@ -2024,7 +2061,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		initDispatcherServlet(ValidatedDataClassController.class, usePathPatterns);
 
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
-		request.addParameter("param1", "value1");
+		request.addParameter("param1", " value1");
 		request.addParameter("param2", "true");
 		request.addParameter("param3", "3");
 		MockHttpServletResponse response = new MockHttpServletResponse();
@@ -2037,7 +2074,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		initDispatcherServlet(ValidatedDataClassController.class, usePathPatterns);
 
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
-		request.addParameter("param1", "value1");
+		request.addParameter("param1", " value1");
 		request.addParameter("param2", "true");
 		request.addParameter("optionalParam", "8");
 		MockHttpServletResponse response = new MockHttpServletResponse();
@@ -2050,7 +2087,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		initDispatcherServlet(ValidatedDataClassController.class, usePathPatterns);
 
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
-		request.addParameter("param1", "value1");
+		request.addParameter("param1", " value1");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		getServlet().service(request, response);
 		assertThat(response.getContentAsString()).isEqualTo("1:value1-null-null");
@@ -2061,7 +2098,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		initDispatcherServlet(ValidatedDataClassController.class, usePathPatterns);
 
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
-		request.addParameter("param1", "value1");
+		request.addParameter("param1", " value1");
 		request.addParameter("param2", "x");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		getServlet().service(request, response);
@@ -2077,7 +2114,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		request.addParameter("param3", "0");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		getServlet().service(request, response);
-		assertThat(response.getContentAsString()).isEqualTo("1:null-true-0");
+		assertThat(response.getContentAsString()).isEqualTo("1:-true-0");
 	}
 
 	@PathPatternsParameterizedTest
@@ -2215,6 +2252,112 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(response.getContentAsString()).isEqualTo("value1-true-3");
 	}
 
+	@PathPatternsParameterizedTest
+	void nestedDataClassBinding(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedDataClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param1", "nestedValue1");
+		request.addParameter("nestedParam2.param2", "true");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("value1-nestedValue1-true-0");
+	}
+
+	@PathPatternsParameterizedTest
+	void nestedDataClassBindingWithAdditionalSetter(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedDataClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param1", "nestedValue1");
+		request.addParameter("nestedParam2.param2", "true");
+		request.addParameter("nestedParam2.param3", "3");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("value1-nestedValue1-true-3");
+	}
+
+	@PathPatternsParameterizedTest
+	void nestedDataClassBindingWithOptionalParameter(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedValidatedDataClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param1", "nestedValue1");
+		request.addParameter("nestedParam2.param2", "true");
+		request.addParameter("nestedParam2.optionalParam", "8");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("value1-nestedValue1-true-8");
+	}
+
+	@PathPatternsParameterizedTest
+	void nestedDataClassBindingWithMissingParameter(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedValidatedDataClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param1", "nestedValue1");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("1:value1-nestedValue1-null-null");
+	}
+
+	@PathPatternsParameterizedTest
+	void nestedDataClassBindingWithConversionError(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedValidatedDataClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param1", "nestedValue1");
+		request.addParameter("nestedParam2.param2", "x");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("1:value1-nestedValue1-x-null");
+	}
+
+	@PathPatternsParameterizedTest
+	void nestedDataClassBindingWithValidationError(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedValidatedDataClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param2", "true");
+		request.addParameter("nestedParam2.param3", "0");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("1:value1--true-0");
+	}
+
+	@PathPatternsParameterizedTest
+	void nestedDataClassBindingWithValidationErrorAndConversionError(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedValidatedDataClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param2", "x");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("2:value1-null-x-null");
+	}
+
+	@PathPatternsParameterizedTest
+	void nestedDataClassBindingWithDataAndLocalDate(boolean usePathPatterns) throws Exception {
+		initDispatcherServlet(NestedDataAndDateClassController.class, usePathPatterns);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/bind");
+		request.addParameter("param1", "value1");
+		request.addParameter("nestedParam2.param1", "nestedValue1");
+		request.addParameter("nestedParam2.param2", "true");
+		request.addParameter("nestedParam2.optionalParam", "8");
+		request.addParameter("nestedParam3.date", "2010-01-01");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		getServlet().service(request, response);
+		assertThat(response.getContentAsString()).isEqualTo("2010-01-01");
+	}
+
 	@Test
 	void routerFunction() throws ServletException, IOException {
 		GenericWebApplicationContext wac = new GenericWebApplicationContext();
@@ -2235,6 +2378,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		assertThat(response.getStatus()).isEqualTo(200);
 		assertThat(response.getContentAsString()).isEqualTo("foo-body");
 	}
+
 
 	@Controller
 	static class ControllerWithEmptyValueMapping {
@@ -2702,7 +2846,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 			vf.afterPropertiesSet();
 			binder.setValidator(vf);
 			assertThat(date).isEqualTo("2007-10-02");
-			assertThat(date2.length).isEqualTo(1);
+			assertThat(date2).hasSize(1);
 			assertThat(date2[0]).isEqualTo("2007-10-02");
 			SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
 			dateFormat.setLenient(false);
@@ -2736,6 +2880,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 
 	@Controller
 	@RequestMapping("/myPath.do")
+	@SuppressWarnings("serial")
 	static class MyParameterDispatchingController implements Serializable {
 
 		private static final long serialVersionUID = 1L;
@@ -3573,7 +3718,6 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 			assertThat(headers.getContentType()).as("Invalid Content-Type").isEqualTo(new MediaType("text", "html"));
 			multiValueMap(headers, writer);
 		}
-
 	}
 
 	@Controller
@@ -3625,14 +3769,14 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 	static class ResponseEntityController {
 
 		@PostMapping("/foo")
-		public ResponseEntity<String> foo(HttpEntity<byte[]> requestEntity) throws Exception {
+		public ResponseEntity<String> foo(HttpEntity<byte[]> requestEntity) {
 			assertThat(requestEntity).isNotNull();
 			assertThat(requestEntity.getHeaders().getFirst("MyRequestHeader")).isEqualTo("MyValue");
 
-			String body = new String(requestEntity.getBody(), "UTF-8");
+			String body = new String(requestEntity.getBody(), StandardCharsets.UTF_8);
 			assertThat(body).isEqualTo("Hello World");
 
-			URI location = new URI("/foo");
+			URI location = URI.create("/foo");
 			return ResponseEntity.created(location).header("MyResponseHeader", "MyValue").body(body);
 		}
 
@@ -3837,11 +3981,11 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 	@Controller
 	static class HttpHeadersResponseController {
 
-		@RequestMapping(value = "", method = RequestMethod.POST)
+		@RequestMapping(value = "/", method = RequestMethod.POST)
 		@ResponseStatus(HttpStatus.CREATED)
-		public HttpHeaders create() throws URISyntaxException {
+		public HttpHeaders create() {
 			HttpHeaders headers = new HttpHeaders();
-			headers.setLocation(new URI("/test/items/123"));
+			headers.setLocation(URI.create("/test/items/123"));
 			return headers;
 		}
 
@@ -3882,6 +4026,11 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		@RequestMapping("/path")
 		public ModelAndView methodWithHttpStatus(MyEntity object) {
 			return new ModelAndView("view", HttpStatus.UNPROCESSABLE_ENTITY);
+		}
+
+		@RequestMapping("/redirect")
+		public ModelAndView methodWithHttpStatusForRedirect(MyEntity object) {
+			return new ModelAndView("redirect:/path", HttpStatus.TEMPORARY_REDIRECT);
 		}
 
 		@RequestMapping("/exception")
@@ -3957,6 +4106,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		@InitBinder
 		public void initBinder(WebDataBinder binder) {
 			binder.setConversionService(new DefaultFormattingConversionService());
+			binder.registerCustomEditor(String.class, "param1", new StringTrimmerEditor(true));
 			LocalValidatorFactoryBean vf = new LocalValidatorFactoryBean();
 			vf.afterPropertiesSet();
 			binder.setValidator(vf);
@@ -4079,7 +4229,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		public String handle(Optional<DataClass> optionalData, BindingResult result) {
 			if (result.hasErrors()) {
 				assertThat(optionalData).isNotNull();
-				assertThat(optionalData.isPresent()).isFalse();
+				assertThat(optionalData).isNotPresent();
 				return result.getFieldValue("param1") + "-" + result.getFieldValue("param2") + "-" +
 						result.getFieldValue("param3");
 			}
@@ -4120,7 +4270,7 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		}
 	}
 
-	static record DataRecord(String param1, boolean param2, int param3) {
+	record DataRecord(String param1, boolean param2, int param3) {
 	}
 
 	@RestController
@@ -4129,6 +4279,147 @@ public class ServletAnnotationControllerHandlerMethodTests extends AbstractServl
 		@RequestMapping("/bind")
 		public String handle(DataRecord data) {
 			return data.param1 + "-" + data.param2 + "-" + data.param3;
+		}
+	}
+
+	static class NestedDataClass {
+
+		@NotNull
+		private final String param1;
+
+		@Valid
+		private final DataClass nestedParam2;
+
+		public NestedDataClass(@NotNull String param1, DataClass nestedParam2) {
+			this.param1 = param1;
+			this.nestedParam2 = nestedParam2;
+		}
+
+		public String getParam1() {
+			return this.param1;
+		}
+
+		public DataClass getNestedParam2() {
+			return this.nestedParam2;
+		}
+	}
+
+	@RestController
+	static class NestedDataClassController {
+
+		@RequestMapping("/bind")
+		public String handle(NestedDataClass data) {
+			DataClass nestedParam2 = data.nestedParam2;
+			return (data.param1 + "-" + nestedParam2.param1 + "-" + nestedParam2.param2 + "-" + nestedParam2.param3);
+		}
+	}
+
+	@RestController
+	static class NestedValidatedDataClassController {
+
+		@InitBinder
+		public void initBinder(WebDataBinder binder) {
+			binder.setConversionService(new DefaultFormattingConversionService());
+			binder.registerCustomEditor(String.class, new StringTrimmerEditor(true));
+			LocalValidatorFactoryBean vf = new LocalValidatorFactoryBean();
+			vf.afterPropertiesSet();
+			binder.setValidator(vf);
+		}
+
+		@RequestMapping("/bind")
+		public NestedBindStatusView handle(@Valid NestedDataClass data, BindingResult result) {
+			assertThat(data).isNotNull();
+			if (result.hasErrors()) {
+				String content = result.getErrorCount() + ":" + result.getFieldValue("param1");
+				content += "-" + result.getFieldValue("nestedParam2.param1");
+				content += "-" + result.getFieldValue("nestedParam2.param2");
+				content += "-" + result.getFieldValue("nestedParam2.param3");
+				return new NestedBindStatusView(content);
+			}
+			DataClass nested = data.nestedParam2;
+			return new NestedBindStatusView(
+					data.param1 + "-" + nested.param1 + "-" + nested.param2 + "-" + nested.param3);
+		}
+	}
+
+	static class NestedBindStatusView extends AbstractView {
+
+		private final String content;
+
+		NestedBindStatusView(String content) {
+			this.content = content;
+		}
+
+		@Override
+		protected void renderMergedOutputModel(
+				Map<String, Object> model, HttpServletRequest request, HttpServletResponse response) throws Exception {
+			RequestContext rc = new RequestContext(request, model);
+			rc.getBindStatus("nestedDataClass");
+			rc.getBindStatus("nestedDataClass.param1");
+			rc.getBindStatus("nestedDataClass.nestedParam2");
+			rc.getBindStatus("nestedDataClass.nestedParam2.param1");
+			rc.getBindStatus("nestedDataClass.nestedParam2.param2");
+			rc.getBindStatus("nestedDataClass.nestedParam2.param3");
+			response.getWriter().write(this.content);
+		}
+	}
+
+	static class NestedDataAndDateClass {
+
+		@NotNull
+		private final String param1;
+
+		@Valid
+		private final DataClass nestedParam2;
+
+		@Valid
+		private final DateClass nestedParam3;
+
+		public NestedDataAndDateClass(
+				@NotNull String param1, DataClass nestedParam2, DateClass nestedParam3) {
+
+			this.param1 = param1;
+			this.nestedParam2 = nestedParam2;
+			this.nestedParam3 = nestedParam3;
+		}
+
+		public String getParam1() {
+			return this.param1;
+		}
+
+		public DataClass getNestedParam2() {
+			return this.nestedParam2;
+		}
+
+		public DateClass getNestedParam3() {
+			return this.nestedParam3;
+		}
+	}
+
+	@RestController
+	static class NestedDataAndDateClassController {
+
+		@InitBinder
+		public void initBinder(WebDataBinder binder) {
+			binder.initDirectFieldAccess();
+			binder.setConversionService(new DefaultFormattingConversionService());
+		}
+
+		@RequestMapping("/bind")
+		public String handle(NestedDataAndDateClass data, BindingResult result) {
+			if (result.hasErrors()) {
+				return result.getFieldError().toString();
+			}
+			assertThat(data).isNotNull();
+			assertThat(data.getParam1()).isEqualTo("value1");
+			assertThat(data.getNestedParam2().param1).isEqualTo("nestedValue1");
+			assertThat(data.getNestedParam2().param2).isTrue();
+			assertThat(data.getNestedParam2().param3).isEqualTo(8);
+			assertThat(data.getNestedParam3().date).isNotNull();
+			assertThat(data.getNestedParam3().date.getYear()).isEqualTo(2010);
+			assertThat(data.getNestedParam3().date.getMonthValue()).isEqualTo(1);
+			assertThat(data.getNestedParam3().date.getDayOfMonth()).isEqualTo(1);
+			return result.getFieldValue("nestedParam3.date").toString();
 		}
 	}
 

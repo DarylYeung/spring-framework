@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.annotation.SubscribeMapping;
+import org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry;
 import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -44,7 +45,6 @@ import org.springframework.messaging.support.AbstractSubscribableChannel;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.ExecutorSubscribableChannel;
 import org.springframework.messaging.support.ImmutableMessageChannelInterceptor;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.servlet.handler.SimpleUrlHandlerMapping;
@@ -60,6 +60,8 @@ import org.springframework.web.socket.messaging.SubProtocolWebSocketHandler;
 import org.springframework.web.socket.server.support.WebSocketHttpRequestHandler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.BOOLEAN;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -67,6 +69,7 @@ import static org.mockito.Mockito.mock;
  *
  * @author Rossen Stoyanchev
  * @author Sebastien Deleuze
+ * @author Sam Brannen
  */
 class WebSocketMessageBrokerConfigurationSupportTests {
 
@@ -162,6 +165,32 @@ class WebSocketMessageBrokerConfigurationSupportTests {
 	}
 
 	@Test
+	void selectorHeaderEnabled() {
+		ApplicationContext context = createContext(TestChannelConfig.class, SelectorHeaderConfigurer.class);
+		SimpleBrokerMessageHandler simpleBrokerMessageHandler = simpleBrokerMessageHandler(context);
+
+		assertThat(simpleBrokerMessageHandler.getSubscriptionRegistry())
+				.asInstanceOf(type(DefaultSubscriptionRegistry.class))
+				.extracting(DefaultSubscriptionRegistry::getSelectorHeaderName)
+				.isEqualTo("selector");
+	}
+
+	@Test
+	void selectorHeaderDisabledByDefault() {
+		ApplicationContext context = createContext(TestChannelConfig.class, TestConfigurer.class);
+		SimpleBrokerMessageHandler simpleBrokerMessageHandler = simpleBrokerMessageHandler(context);
+
+		assertThat(simpleBrokerMessageHandler.getSubscriptionRegistry())
+				.asInstanceOf(type(DefaultSubscriptionRegistry.class))
+				.extracting(DefaultSubscriptionRegistry::getSelectorHeaderName)
+				.isNull();
+	}
+
+	private static SimpleBrokerMessageHandler simpleBrokerMessageHandler(ApplicationContext context) {
+		return context.getBean("simpleBrokerMessageHandler", SimpleBrokerMessageHandler.class);
+	}
+
+	@Test
 	void webSocketMessageBrokerStats() {
 		ApplicationContext context = createContext(TestChannelConfig.class, TestConfigurer.class);
 		String name = "webSocketMessageBrokerStats";
@@ -190,7 +219,7 @@ class WebSocketMessageBrokerConfigurationSupportTests {
 
 		WebSocketSession session = new TestWebSocketSession("id");
 		handler.afterConnectionEstablished(session);
-		assertThat(session.getAttributes().get("decorated")).isEqualTo(true);
+		assertThat(session.getAttributes().get("decorated")).asInstanceOf(BOOLEAN).isTrue();
 	}
 
 
@@ -238,9 +267,25 @@ class WebSocketMessageBrokerConfigurationSupportTests {
 		@Override
 		public void configureMessageBroker(MessageBrokerRegistry registry) {
 			registry.enableSimpleBroker()
-					.setTaskScheduler(mock(TaskScheduler.class))
+					.setTaskScheduler(mock())
 					.setHeartbeatValue(new long[] {15000, 15000});
 		}
+	}
+
+	@Configuration
+	static class SelectorHeaderConfigurer implements WebSocketMessageBrokerConfigurer {
+
+		@Override
+		public void registerStompEndpoints(StompEndpointRegistry registry) {
+			registry.addEndpoint("/simpleBroker");
+		}
+
+		@Override
+		public void configureMessageBroker(MessageBrokerRegistry registry) {
+			// Explicitly enable selector header support
+			registry.enableSimpleBroker().setSelectorHeaderName("selector");
+		}
+
 	}
 
 	@Configuration

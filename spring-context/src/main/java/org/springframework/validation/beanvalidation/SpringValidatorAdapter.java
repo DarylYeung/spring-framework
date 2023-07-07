@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package org.springframework.validation.beanvalidation;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +38,7 @@ import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.Errors;
 import org.springframework.validation.FieldError;
@@ -66,13 +66,8 @@ import org.springframework.validation.SmartValidator;
  */
 public class SpringValidatorAdapter implements SmartValidator, jakarta.validation.Validator {
 
-	private static final Set<String> internalAnnotationAttributes = new HashSet<>(4);
+	private static final Set<String> internalAnnotationAttributes = Set.of("message", "groups", "payload");
 
-	static {
-		internalAnnotationAttributes.add("message");
-		internalAnnotationAttributes.add("groups");
-		internalAnnotationAttributes.add("payload");
-	}
 
 	@Nullable
 	private jakarta.validation.Validator targetValidator;
@@ -207,7 +202,7 @@ public class SpringValidatorAdapter implements SmartValidator, jakarta.validatio
 		StringBuilder sb = new StringBuilder();
 		boolean first = true;
 		for (Path.Node node : path) {
-			if (node.isInIterable()) {
+			if (node.isInIterable() && !first) {
 				sb.append('[');
 				Object index = node.getIndex();
 				if (index == null) {
@@ -292,7 +287,9 @@ public class SpringValidatorAdapter implements SmartValidator, jakarta.validatio
 	 * @see #getArgumentsForConstraint
 	 */
 	protected MessageSourceResolvable getResolvableField(String objectName, String field) {
-		String[] codes = new String[] {objectName + Errors.NESTED_PATH_SEPARATOR + field, field};
+		String[] codes = (StringUtils.hasText(field) ?
+				new String[] {objectName + Errors.NESTED_PATH_SEPARATOR + field, field} :
+				new String[] {objectName});
 		return new DefaultMessageSourceResolvable(codes, field);
 	}
 

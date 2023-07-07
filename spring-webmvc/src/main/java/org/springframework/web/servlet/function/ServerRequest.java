@@ -66,15 +66,14 @@ public interface ServerRequest {
 	 * @return the HTTP method as an HttpMethod enum value, or {@code null}
 	 * if not resolvable (e.g. in case of a non-standard HTTP method)
 	 */
-	@Nullable
-	default HttpMethod method() {
-		return HttpMethod.resolve(methodName());
-	}
+	HttpMethod method();
 
 	/**
 	 * Get the name of the HTTP method.
 	 * @return the HTTP method as a String
+	 * @deprecated in favor of {@link #method()}
 	 */
+	@Deprecated
 	String methodName();
 
 	/**
@@ -268,7 +267,7 @@ public interface ServerRequest {
 	 * also with conditional POST/PUT/DELETE requests.
 	 * <p><strong>Note:</strong> you can use either
 	 * this {@code #checkNotModified(Instant)} method; or
-	 * {@link #checkNotModified(String)}. If you want enforce both
+	 * {@link #checkNotModified(String)}. If you want to enforce both
 	 * a strong entity tag and a Last-Modified value,
 	 * as recommended by the HTTP specification,
 	 * then you should use {@link #checkNotModified(Instant, String)}.
@@ -302,7 +301,7 @@ public interface ServerRequest {
 	 * also with conditional POST/PUT/DELETE requests.
 	 * <p><strong>Note:</strong> you can use either
 	 * this {@link #checkNotModified(Instant)} method; or
-	 * {@code #checkNotModified(String)}. If you want enforce both
+	 * {@code #checkNotModified(String)}. If you want to enforce both
 	 * a strong entity tag and a Last-Modified value,
 	 * as recommended by the HTTP specification,
 	 * then you should use {@link #checkNotModified(Instant, String)}.

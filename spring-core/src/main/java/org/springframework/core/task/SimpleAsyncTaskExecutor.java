@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ import org.springframework.util.concurrent.ListenableFutureTask;
  * @see SyncTaskExecutor
  * @see org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
  */
-@SuppressWarnings("serial")
+@SuppressWarnings({"serial", "deprecation"})
 public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 		implements AsyncListenableTaskExecutor, Serializable {
 
@@ -65,6 +65,9 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 
 	/** Internal concurrency throttle used by this executor. */
 	private final ConcurrencyThrottleAdapter concurrencyThrottle = new ConcurrencyThrottleAdapter();
+
+	@Nullable
+	private VirtualThreadDelegate virtualThreadDelegate;
 
 	@Nullable
 	private ThreadFactory threadFactory;
@@ -96,6 +99,16 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 		this.threadFactory = threadFactory;
 	}
 
+
+	/**
+	 * Switch this executor to virtual threads. Requires Java 21 or higher.
+	 * <p>The default is {@code false}, indicating platform threads.
+	 * Set this flag to {@code true} in order to create virtual threads instead.
+	 * @since 6.1
+	 */
+	public void setVirtualThreads(boolean virtual) {
+		this.virtualThreadDelegate = (virtual ? new VirtualThreadDelegate() : null);
+	}
 
 	/**
 	 * Specify an external factory to use for creating new Threads,
@@ -173,6 +186,7 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 	 * if configured (through the superclass's settings).
 	 * @see #doExecute(Runnable)
 	 */
+	@SuppressWarnings("deprecation")
 	@Override
 	public void execute(Runnable task) {
 		execute(task, TIMEOUT_INDEFINITE);
@@ -187,6 +201,7 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 	 * @see #TIMEOUT_IMMEDIATE
 	 * @see #doExecute(Runnable)
 	 */
+	@Deprecated
 	@Override
 	public void execute(Runnable task, long startTimeout) {
 		Assert.notNull(task, "Runnable must not be null");
@@ -200,6 +215,7 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 		}
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public Future<?> submit(Runnable task) {
 		FutureTask<Object> future = new FutureTask<>(task, null);
@@ -207,6 +223,7 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 		return future;
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public <T> Future<T> submit(Callable<T> task) {
 		FutureTask<T> future = new FutureTask<>(task);
@@ -214,6 +231,7 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 		return future;
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public ListenableFuture<?> submitListenable(Runnable task) {
 		ListenableFutureTask<Object> future = new ListenableFutureTask<>(task, null);
@@ -221,6 +239,7 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 		return future;
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public <T> ListenableFuture<T> submitListenable(Callable<T> task) {
 		ListenableFutureTask<T> future = new ListenableFutureTask<>(task);
@@ -232,13 +251,19 @@ public class SimpleAsyncTaskExecutor extends CustomizableThreadCreator
 	 * Template method for the actual execution of a task.
 	 * <p>The default implementation creates a new Thread and starts it.
 	 * @param task the Runnable to execute
+	 * @see #setVirtualThreads
 	 * @see #setThreadFactory
 	 * @see #createThread
 	 * @see java.lang.Thread#start()
 	 */
 	protected void doExecute(Runnable task) {
-		Thread thread = (this.threadFactory != null ? this.threadFactory.newThread(task) : createThread(task));
-		thread.start();
+		if (this.virtualThreadDelegate != null) {
+			this.virtualThreadDelegate.startVirtualThread(nextThreadName(), task);
+		}
+		else {
+			Thread thread = (this.threadFactory != null ? this.threadFactory.newThread(task) : createThread(task));
+			thread.start();
+		}
 	}
 
 

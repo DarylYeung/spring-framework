@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.function.Supplier;
 
 import org.springframework.asm.MethodVisitor;
 import org.springframework.core.convert.TypeDescriptor;
@@ -45,7 +46,7 @@ import org.springframework.util.ReflectionUtils;
 
 /**
  * An Indexer can index into some proceeding structure to access a particular piece of it.
- * Supported structures are: strings / collections (lists/sets) / arrays.
+ * <p>Supported structures are: strings / collections (lists/sets) / arrays.
  *
  * @author Andy Clement
  * @author Phillip Webb
@@ -103,8 +104,12 @@ public class Indexer extends SpelNodeImpl {
 	}
 
 	@Override
-	public void setValue(ExpressionState state, @Nullable Object newValue) throws EvaluationException {
-		getValueRef(state).setValue(newValue);
+	public TypedValue setValueInternal(ExpressionState state, Supplier<TypedValue> valueSupplier)
+			throws EvaluationException {
+
+		TypedValue typedValue = valueSupplier.get();
+		getValueRef(state).setValue(typedValue.getValue());
+		return typedValue;
 	}
 
 	@Override
@@ -165,11 +170,11 @@ public class Indexer extends SpelNodeImpl {
 				this.indexedType = IndexedType.ARRAY;
 				return new ArrayIndexingValueRef(state.getTypeConverter(), target, idx, targetDescriptor);
 			}
-			else if (target instanceof Collection) {
+			else if (target instanceof Collection<?> collection) {
 				if (target instanceof List) {
 					this.indexedType = IndexedType.LIST;
 				}
-				return new CollectionIndexingValueRef((Collection<?>) target, idx, targetDescriptor,
+				return new CollectionIndexingValueRef(collection, idx, targetDescriptor,
 						state.getTypeConverter(), state.getConfiguration().isAutoGrowCollections(),
 						state.getConfiguration().getMaximumAutoGrowSize());
 			}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import java.util.function.Function;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
+import io.micrometer.observation.ObservationConvention;
+import io.micrometer.observation.ObservationRegistry;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -35,7 +37,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.ReactiveAdapterRegistry;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.reactive.ClientHttpConnector;
@@ -256,6 +258,22 @@ public interface WebClient {
 		Builder defaultRequest(Consumer<RequestHeadersSpec<?>> defaultRequest);
 
 		/**
+		 * Register a default
+		 * {@link ResponseSpec#onStatus(Predicate, Function) status handler} to
+		 * apply to every response. Such default handlers are applied in the
+		 * order in which they are registered, and after any others that are
+		 * registered for a specific response.
+		 * <p>The default status handlers are not applied to {@code exchangeTo*()}
+		 * methods, as those variants have direct access to the client response.
+		 * @param statusPredicate to match responses with
+		 * @param exceptionFunction to map the response to an error signal
+		 * @return this builder
+		 * @since 6.0
+		 */
+		Builder defaultStatusHandler(Predicate<HttpStatusCode> statusPredicate,
+				Function<ClientResponse, Mono<? extends Throwable>> exceptionFunction);
+
+		/**
 		 * Add the given filter to the end of the filter chain.
 		 * @param filter the filter to be added to the chain
 		 */
@@ -322,6 +340,23 @@ public interface WebClient {
 		Builder exchangeFunction(ExchangeFunction exchangeFunction);
 
 		/**
+		 * Provide an {@link ObservationRegistry} to use for recording
+		 * observations for HTTP client calls.
+		 * @param observationRegistry the observation registry to use
+		 * @since 6.0
+		 */
+		Builder observationRegistry(ObservationRegistry observationRegistry);
+
+		/**
+		 * Provide an {@link ObservationConvention} to use for collecting
+		 * metadata for the request observation. Will use {@link DefaultClientRequestObservationConvention}
+		 * if none provided.
+		 * @param observationConvention the observation convention to use
+		 * @since 6.0
+		 */
+		Builder observationConvention(ClientRequestObservationConvention observationConvention);
+
+		/**
 		 * Apply the given {@code Consumer} to this builder instance.
 		 * <p>This can be useful for applying pre-packaged customizations.
 		 * @param builderConsumer the consumer to apply
@@ -334,7 +369,7 @@ public interface WebClient {
 		Builder clone();
 
 		/**
-		 * Builder the {@link WebClient} instance.
+		 * Build the {@link WebClient} instance.
 		 */
 		WebClient build();
 	}
@@ -519,18 +554,15 @@ public interface WebClient {
 		 * scenarios, for example to decode the response differently depending
 		 * on the response status:
 		 * <p><pre>
-		 * Mono&lt;Object&gt; entityMono = client.get()
+		 * Mono&lt;Person&gt; entityMono = client.get()
 		 *     .uri("/persons/1")
 		 *     .accept(MediaType.APPLICATION_JSON)
 		 *     .exchangeToMono(response -&gt; {
 		 *         if (response.statusCode().equals(HttpStatus.OK)) {
 		 *             return response.bodyToMono(Person.class);
 		 *         }
-		 *         else if (response.statusCode().is4xxClientError()) {
-		 *             return response.bodyToMono(ErrorContainer.class);
-		 *         }
 		 *         else {
-		 *             return Mono.error(response.createException());
+		 *             return response.createError();
 		 *         }
 		 *     });
 		 * </pre>
@@ -551,18 +583,15 @@ public interface WebClient {
 		 * scenarios, for example to decode the response differently depending
 		 * on the response status:
 		 * <p><pre>
-		 * Mono&lt;Object&gt; entityMono = client.get()
+		 * Flux&lt;Person&gt; entityMono = client.get()
 		 *     .uri("/persons")
 		 *     .accept(MediaType.APPLICATION_JSON)
 		 *     .exchangeToFlux(response -&gt; {
 		 *         if (response.statusCode().equals(HttpStatus.OK)) {
 		 *             return response.bodyToFlux(Person.class);
 		 *         }
-		 *         else if (response.statusCode().is4xxClientError()) {
-		 *             return response.bodyToMono(ErrorContainer.class).flux();
-		 *         }
 		 *         else {
-		 *             return Flux.error(response.createException());
+		 *             return response.createError().flux();
 		 *         }
 		 *     });
 		 * </pre>
@@ -773,7 +802,7 @@ public interface WebClient {
 		 * @return this builder
 		 * @see ClientResponse#createException()
 		 */
-		ResponseSpec onStatus(Predicate<HttpStatus> statusPredicate,
+		ResponseSpec onStatus(Predicate<HttpStatusCode> statusPredicate,
 				Function<ClientResponse, Mono<? extends Throwable>> exceptionFunction);
 
 		/**

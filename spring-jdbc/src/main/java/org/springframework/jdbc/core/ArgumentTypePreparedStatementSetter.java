@@ -61,8 +61,7 @@ public class ArgumentTypePreparedStatementSetter implements PreparedStatementSet
 		if (this.args != null && this.argTypes != null) {
 			for (int i = 0; i < this.args.length; i++) {
 				Object arg = this.args[i];
-				if (arg instanceof Collection && this.argTypes[i] != Types.ARRAY) {
-					Collection<?> entries = (Collection<?>) arg;
+				if (arg instanceof Collection<?> entries && this.argTypes[i] != Types.ARRAY) {
 					for (Object entry : entries) {
 						if (entry instanceof Object[] valueArray) {
 							for (Object argValue : valueArray) {
@@ -86,7 +85,7 @@ public class ArgumentTypePreparedStatementSetter implements PreparedStatementSet
 
 	/**
 	 * Set the value for the prepared statement's specified parameter position using the passed in
-	 * value and type. This method can be overridden by sub-classes if needed.
+	 * value and type. This method can be overridden by subclasses if needed.
 	 * @param ps the PreparedStatement
 	 * @param parameterPosition index of the parameter position
 	 * @param argType the argument type

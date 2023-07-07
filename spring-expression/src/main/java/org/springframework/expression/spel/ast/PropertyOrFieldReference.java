@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import org.springframework.asm.Label;
 import org.springframework.asm.MethodVisitor;
@@ -92,8 +93,8 @@ public class PropertyOrFieldReference extends SpelNodeImpl {
 		TypedValue tv = getValueInternal(state.getActiveContextObject(), state.getEvaluationContext(),
 				state.getConfiguration().isAutoGrowNullReferences());
 		PropertyAccessor accessorToUse = this.cachedReadAccessor;
-		if (accessorToUse instanceof CompilablePropertyAccessor accessor) {
-			setExitTypeDescriptor(CodeFlow.toDescriptor(accessor.getPropertyType()));
+		if (accessorToUse instanceof CompilablePropertyAccessor compilablePropertyAccessor) {
+			setExitTypeDescriptor(CodeFlow.toDescriptor(compilablePropertyAccessor.getPropertyType()));
 		}
 		return tv;
 	}
@@ -147,8 +148,12 @@ public class PropertyOrFieldReference extends SpelNodeImpl {
 	}
 
 	@Override
-	public void setValue(ExpressionState state, @Nullable Object newValue) throws EvaluationException {
-		writeProperty(state.getActiveContextObject(), state.getEvaluationContext(), this.name, newValue);
+	public TypedValue setValueInternal(ExpressionState state, Supplier<TypedValue> valueSupplier)
+			throws EvaluationException {
+
+		TypedValue typedValue = valueSupplier.get();
+		writeProperty(state.getActiveContextObject(), state.getEvaluationContext(), this.name, typedValue.getValue());
+		return typedValue;
 	}
 
 	@Override
@@ -164,7 +169,7 @@ public class PropertyOrFieldReference extends SpelNodeImpl {
 	/**
 	 * Attempt to read the named property from the current context object.
 	 * @return the value of the property
-	 * @throws EvaluationException if any problem accessing the property or it cannot be found
+	 * @throws EvaluationException if any problem accessing the property, or if it cannot be found
 	 */
 	private TypedValue readProperty(TypedValue contextObject, EvaluationContext evalContext, String name)
 			throws EvaluationException {
@@ -337,7 +342,7 @@ public class PropertyOrFieldReference extends SpelNodeImpl {
 	@Override
 	public void generateCode(MethodVisitor mv, CodeFlow cf) {
 		PropertyAccessor accessorToUse = this.cachedReadAccessor;
-		if (!(accessorToUse instanceof CompilablePropertyAccessor)) {
+		if (!(accessorToUse instanceof CompilablePropertyAccessor compilablePropertyAccessor)) {
 			throw new IllegalStateException("Property accessor is not compilable: " + accessorToUse);
 		}
 
@@ -352,7 +357,7 @@ public class PropertyOrFieldReference extends SpelNodeImpl {
 			mv.visitLabel(continueLabel);
 		}
 
-		((CompilablePropertyAccessor) accessorToUse).generateCode(this.name, mv, cf);
+		compilablePropertyAccessor.generateCode(this.name, mv, cf);
 		cf.pushDescriptor(this.exitTypeDescriptor);
 
 		if (this.originalPrimitiveExitTypeDescriptor != null) {

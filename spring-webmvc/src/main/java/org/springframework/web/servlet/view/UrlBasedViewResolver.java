@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -331,10 +331,10 @@ public class UrlBasedViewResolver extends AbstractCachingViewResolver implements
 	}
 
 	/**
-	 * Allow Map access to the static attributes for views returned by
+	 * Allow {@code Map} access to the static attributes for views returned by
 	 * this resolver, with the option to add or override specific entries.
 	 * <p>Useful for specifying entries directly, for example via
-	 * "attributesMap[myKey]". This is particularly useful for
+	 * {@code attributesMap[myKey]}. This is particularly useful for
 	 * adding or overriding entries in child view definitions.
 	 */
 	public Map<String, Object> getAttributesMap() {
@@ -492,7 +492,7 @@ public class UrlBasedViewResolver extends AbstractCachingViewResolver implements
 	}
 
 	/**
-	 * Indicates whether or not this {@link org.springframework.web.servlet.ViewResolver} can
+	 * Indicates whether this {@link org.springframework.web.servlet.ViewResolver} can
 	 * handle the supplied view name. If not, {@link #createView(String, java.util.Locale)} will
 	 * return {@code null}. The default implementation checks against the configured
 	 * {@link #setViewNames view names}.
@@ -613,8 +613,8 @@ public class UrlBasedViewResolver extends AbstractCachingViewResolver implements
 		ApplicationContext context = getApplicationContext();
 		if (context != null) {
 			Object initialized = context.getAutowireCapableBeanFactory().initializeBean(view, viewName);
-			if (initialized instanceof View) {
-				return (View) initialized;
+			if (initialized instanceof View initializedView) {
+				return initializedView;
 			}
 		}
 		return view;

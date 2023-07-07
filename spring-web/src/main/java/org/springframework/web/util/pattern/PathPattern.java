@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import java.util.StringJoiner;
 
 import org.springframework.http.server.PathContainer;
 import org.springframework.http.server.PathContainer.Element;
+import org.springframework.http.server.PathContainer.PathSegment;
 import org.springframework.http.server.PathContainer.Separator;
 import org.springframework.lang.Nullable;
 import org.springframework.util.CollectionUtils;
@@ -113,7 +114,7 @@ public class PathPattern implements Comparable<PathPattern> {
 	/** If this pattern has no trailing slash, allow candidates to include one and still match successfully. */
 	private final boolean matchOptionalTrailingSeparator;
 
-	/** Will this match candidates in a case sensitive way? (case sensitivity  at parse time). */
+	/** Will this match candidates in a case-sensitive way? (case sensitivity  at parse time). */
 	private final boolean caseSensitive;
 
 	/** First path element in the parsed chain of path elements for this pattern. */
@@ -150,6 +151,7 @@ public class PathPattern implements Comparable<PathPattern> {
 	private boolean catchAll = false;
 
 
+	@SuppressWarnings("deprecation")
 	PathPattern(String patternText, PathPatternParser parser, @Nullable PathElement head) {
 		this.patternString = patternText;
 		this.parser = parser;
@@ -303,7 +305,7 @@ public class PathPattern implements Comparable<PathPattern> {
 		// Find first path element that is not a separator or a literal (i.e. the first pattern based element)
 		PathElement elem = this.head;
 		while (elem != null) {
-			if (elem.getWildcardCount() != 0 || elem.getCaptureCount() != 0) {
+			if (!elem.isLiteral()) {
 				break;
 			}
 			elem = elem.next;
@@ -725,7 +727,7 @@ public class PathPattern implements Comparable<PathPattern> {
 		 */
 		String pathElementValue(int pathIndex) {
 			Element element = (pathIndex < this.pathLength) ? this.pathElements.get(pathIndex) : null;
-			return (element instanceof PathContainer.PathSegment pathSegment ? pathSegment.valueToMatch() : "");
+			return (element instanceof PathSegment pathSegment ? pathSegment.valueToMatch() : "");
 		}
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ public class DefaultContextLoadTimeWeaver implements LoadTimeWeaver, BeanClassLo
 	}
 
 	/*
-	 * This method never fails, allowing to try other possible ways to use an
+	 * This method never fails, allowing to try other possible ways to use a
 	 * server-agnostic weaver. This non-failure logic is required since
 	 * determining a load-time weaver based on the ClassLoader name alone may
 	 * legitimately fail due to other mismatches.
@@ -128,12 +128,12 @@ public class DefaultContextLoadTimeWeaver implements LoadTimeWeaver, BeanClassLo
 
 	@Override
 	public void destroy() {
-		if (this.loadTimeWeaver instanceof InstrumentationLoadTimeWeaver) {
+		if (this.loadTimeWeaver instanceof InstrumentationLoadTimeWeaver iltw) {
 			if (logger.isDebugEnabled()) {
 				logger.debug("Removing all registered transformers for class loader: " +
 						this.loadTimeWeaver.getInstrumentableClassLoader().getClass().getName());
 			}
-			((InstrumentationLoadTimeWeaver) this.loadTimeWeaver).removeTransformers();
+			iltw.removeTransformers();
 		}
 	}
 

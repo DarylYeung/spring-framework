@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,7 @@ import org.springframework.jmx.support.RegistrationPolicy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatRuntimeException;
 
 /**
  * Integration tests for the {@link MBeanExporter} class.
@@ -83,18 +84,15 @@ public class MBeanExporterTests extends AbstractMBeanServerTests {
 		listeners.put("*", null);
 		MBeanExporter exporter = new MBeanExporter();
 
-		assertThatIllegalArgumentException().isThrownBy(() ->
-				exporter.setNotificationListenerMappings(listeners));
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> exporter.setNotificationListenerMappings(listeners));
 	}
 
 	@Test
 	void testRegisterNotificationListenerForNonExistentMBean() throws Exception {
 		Map<String, NotificationListener> listeners = new HashMap<>();
-		NotificationListener dummyListener = new NotificationListener() {
-			@Override
-			public void handleNotification(Notification notification, Object handback) {
-				throw new UnsupportedOperationException();
-			}
+		NotificationListener dummyListener = (notification, handback) -> {
+			throw new UnsupportedOperationException();
 		};
 		// the MBean with the supplied object name does not exist...
 		listeners.put("spring:type=Test", dummyListener);
@@ -102,9 +100,10 @@ public class MBeanExporterTests extends AbstractMBeanServerTests {
 		exporter.setBeans(getBeanMap());
 		exporter.setServer(server);
 		exporter.setNotificationListenerMappings(listeners);
-		assertThatExceptionOfType(MBeanExportException.class).as("NotificationListener on a non-existent MBean").isThrownBy(() ->
-				start(exporter))
-			.satisfies(ex -> assertThat(ex.contains(InstanceNotFoundException.class)));
+		assertThatExceptionOfType(MBeanExportException.class)
+				.as("NotificationListener on a non-existent MBean")
+				.isThrownBy(() -> start(exporter))
+				.withCauseExactlyInstanceOf(InstanceNotFoundException.class);
 	}
 
 	@Test
@@ -167,8 +166,8 @@ public class MBeanExporterTests extends AbstractMBeanServerTests {
 			ObjectInstance instance = server.getObjectInstance(ObjectNameManager.getInstance("spring:mbean=true"));
 			assertThat(instance).isNotNull();
 
-			assertThatExceptionOfType(InstanceNotFoundException.class).isThrownBy(() ->
-					server.getObjectInstance(ObjectNameManager.getInstance("spring:mbean=false")));
+			assertThatExceptionOfType(InstanceNotFoundException.class)
+					.isThrownBy(() -> server.getObjectInstance(ObjectNameManager.getInstance("spring:mbean=false")));
 		}
 	}
 
@@ -524,7 +523,8 @@ public class MBeanExporterTests extends AbstractMBeanServerTests {
 
 		this.server.unregisterMBean(new ObjectName(OBJECT_NAME));
 		exporter.destroy();
-		assertThat(listener.getUnregistered().size()).as("Listener should not have been invoked (MBean previously unregistered by external agent)").isEqualTo(0);
+		assertThat(listener.getUnregistered()).as("Listener should not have been invoked (MBean previously unregistered by external agent)")
+				.isEmpty();
 	}
 
 	@Test  // SPR-3302
@@ -592,8 +592,8 @@ public class MBeanExporterTests extends AbstractMBeanServerTests {
 		exporter.setBeans(beansToExport);
 		exporter.setBeanFactory(factory);
 
-		assertThatExceptionOfType(RuntimeException.class).as("failed during creation of RuntimeExceptionThrowingConstructorBean").isThrownBy(() ->
-				start(exporter));
+		assertThatRuntimeException().as("failed during creation of RuntimeExceptionThrowingConstructorBean")
+			.isThrownBy(() -> start(exporter));
 
 		assertIsNotRegistered("Must have unregistered all previously registered MBeans due to RuntimeException",
 				ObjectNameManager.getInstance(objectName1));
@@ -666,8 +666,8 @@ public class MBeanExporterTests extends AbstractMBeanServerTests {
 
 	private void assertListener(MockMBeanExporterListener listener) throws MalformedObjectNameException {
 		ObjectName desired = ObjectNameManager.getInstance(OBJECT_NAME);
-		assertThat(listener.getRegistered().size()).as("Incorrect number of registrations").isEqualTo(1);
-		assertThat(listener.getUnregistered().size()).as("Incorrect number of unregistrations").isEqualTo(1);
+		assertThat(listener.getRegistered()).as("Incorrect number of registrations").hasSize(1);
+		assertThat(listener.getUnregistered()).as("Incorrect number of unregistrations").hasSize(1);
 		assertThat(listener.getRegistered().get(0)).as("Incorrect ObjectName in register").isEqualTo(desired);
 		assertThat(listener.getUnregistered().get(0)).as("Incorrect ObjectName in unregister").isEqualTo(desired);
 	}
@@ -726,7 +726,7 @@ public class MBeanExporterTests extends AbstractMBeanServerTests {
 	}
 
 
-	public static interface PersonMBean {
+	public interface PersonMBean {
 
 		String getName();
 	}

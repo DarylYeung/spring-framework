@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,20 +35,27 @@ import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
- * A root bean definition represents the merged bean definition that backs
- * a specific bean in a Spring BeanFactory at runtime. It might have been created
- * from multiple original bean definitions that inherit from each other,
- * typically registered as {@link GenericBeanDefinition GenericBeanDefinitions}.
+ * A root bean definition represents the <b>merged bean definition at runtime</b>
+ * that backs a specific bean in a Spring BeanFactory. It might have been created
+ * from multiple original bean definitions that inherit from each other, e.g.
+ * {@link GenericBeanDefinition GenericBeanDefinitions} from XML declarations.
  * A root bean definition is essentially the 'unified' bean definition view at runtime.
  *
- * <p>Root bean definitions may also be used for registering individual bean definitions
- * in the configuration phase. However, since Spring 2.5, the preferred way to register
- * bean definitions programmatically is the {@link GenericBeanDefinition} class.
- * GenericBeanDefinition has the advantage that it allows to dynamically define
- * parent dependencies, not 'hard-coding' the role as a root bean definition.
+ * <p>Root bean definitions may also be used for <b>registering individual bean
+ * definitions in the configuration phase.</b> This is particularly applicable for
+ * programmatic definitions derived from factory methods (e.g. {@code @Bean} methods)
+ * and instance suppliers (e.g. lambda expressions) which come with extra type metadata
+ * (see {@link #setTargetType(ResolvableType)}/{@link #setResolvedFactoryMethod(Method)}).
+ *
+ * <p>Note: The preferred choice for bean definitions derived from declarative sources
+ * (e.g. XML definitions) is the flexible {@link GenericBeanDefinition} variant.
+ * GenericBeanDefinition comes with the advantage that it allows for dynamically
+ * defining parent dependencies, not 'hard-coding' the role as a root bean definition,
+ * even supporting parent relationship changes in the bean post-processor phase.
  *
  * @author Rod Johnson
  * @author Juergen Hoeller
+ * @author Sam Brannen
  * @see GenericBeanDefinition
  * @see ChildBeanDefinition
  */
@@ -138,7 +145,6 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 * @see #setPropertyValues
 	 */
 	public RootBeanDefinition() {
-		super();
 	}
 
 	/**
@@ -147,8 +153,19 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 * @see #setBeanClass
 	 */
 	public RootBeanDefinition(@Nullable Class<?> beanClass) {
-		super();
 		setBeanClass(beanClass);
+	}
+
+	/**
+	 * Create a new RootBeanDefinition for a singleton.
+	 * @param beanType the type of bean to instantiate
+	 * @since 6.0
+	 * @see #setTargetType(ResolvableType)
+	 * @deprecated as of 6.0.11, in favor of an extra {@link #setTargetType(ResolvableType)} call
+	 */
+	@Deprecated(since = "6.0.11")
+	public RootBeanDefinition(@Nullable ResolvableType beanType) {
+		setTargetType(beanType);
 	}
 
 	/**
@@ -161,7 +178,6 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 * @see #setInstanceSupplier
 	 */
 	public <T> RootBeanDefinition(@Nullable Class<T> beanClass, @Nullable Supplier<T> instanceSupplier) {
-		super();
 		setBeanClass(beanClass);
 		setInstanceSupplier(instanceSupplier);
 	}
@@ -177,7 +193,6 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 * @see #setInstanceSupplier
 	 */
 	public <T> RootBeanDefinition(@Nullable Class<T> beanClass, String scope, @Nullable Supplier<T> instanceSupplier) {
-		super();
 		setBeanClass(beanClass);
 		setScope(scope);
 		setInstanceSupplier(instanceSupplier);
@@ -192,7 +207,6 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 * (not applicable to autowiring a constructor, thus ignored there)
 	 */
 	public RootBeanDefinition(@Nullable Class<?> beanClass, int autowireMode, boolean dependencyCheck) {
-		super();
 		setBeanClass(beanClass);
 		setAutowireMode(autowireMode);
 		if (dependencyCheck && getResolvedAutowireMode() != AUTOWIRE_CONSTRUCTOR) {
@@ -314,7 +328,7 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 * Specify a generics-containing target type of this bean definition, if known in advance.
 	 * @since 4.3.3
 	 */
-	public void setTargetType(ResolvableType targetType) {
+	public void setTargetType(@Nullable ResolvableType targetType) {
 		this.targetType = targetType;
 	}
 
@@ -412,6 +426,9 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	 */
 	public void setResolvedFactoryMethod(@Nullable Method method) {
 		this.factoryMethodToIntrospect = method;
+		if (method != null) {
+			setUniqueFactoryMethodName(method.getName());
+		}
 	}
 
 	/**
@@ -421,6 +438,27 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	@Nullable
 	public Method getResolvedFactoryMethod() {
 		return this.factoryMethodToIntrospect;
+	}
+
+	@Override
+	public void setInstanceSupplier(@Nullable Supplier<?> supplier) {
+		super.setInstanceSupplier(supplier);
+		Method factoryMethod = (supplier instanceof InstanceSupplier<?> instanceSupplier ?
+				instanceSupplier.getFactoryMethod() : null);
+		if (factoryMethod != null) {
+			setResolvedFactoryMethod(factoryMethod);
+		}
+	}
+
+	/**
+	 * Mark this bean definition as post-processed,
+	 * i.e. processed by {@link MergedBeanDefinitionPostProcessor}.
+	 * @since 6.0
+	 */
+	public void markAsPostProcessed() {
+		synchronized (this.postProcessingLock) {
+			this.postProcessed = true;
+		}
 	}
 
 	/**
@@ -436,7 +474,7 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Check whether the given method or field is an externally managed configuration member.
+	 * Determine if the given method or field is an externally managed configuration member.
 	 */
 	public boolean isExternallyManagedConfigMember(Member configMember) {
 		synchronized (this.postProcessingLock) {
@@ -446,7 +484,7 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Return all externally managed configuration methods and fields (as an immutable Set).
+	 * Get all externally managed configuration methods and fields (as an immutable Set).
 	 * @since 5.3.11
 	 */
 	public Set<Member> getExternallyManagedConfigMembers() {
@@ -458,7 +496,16 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Register an externally managed configuration initialization method.
+	 * Register an externally managed configuration initialization method &mdash;
+	 * for example, a method annotated with JSR-250's {@code javax.annotation.PostConstruct}
+	 * or Jakarta's {@link jakarta.annotation.PostConstruct} annotation.
+	 * <p>The supplied {@code initMethod} may be a
+	 * {@linkplain Method#getName() simple method name} or a
+	 * {@linkplain org.springframework.util.ClassUtils#getQualifiedMethodName(Method)
+	 * qualified method name} for package-private and {@code private} methods.
+	 * A qualified name is necessary for package-private and {@code private} methods
+	 * in order to disambiguate between multiple such methods with the same name
+	 * within a type hierarchy.
 	 */
 	public void registerExternallyManagedInitMethod(String initMethod) {
 		synchronized (this.postProcessingLock) {
@@ -470,7 +517,10 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Check whether the given method name indicates an externally managed initialization method.
+	 * Determine if the given method name indicates an externally managed
+	 * initialization method.
+	 * <p>See {@link #registerExternallyManagedInitMethod} for details
+	 * regarding the format for the supplied {@code initMethod}.
 	 */
 	public boolean isExternallyManagedInitMethod(String initMethod) {
 		synchronized (this.postProcessingLock) {
@@ -480,7 +530,28 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Return all externally managed initialization methods (as an immutable Set).
+	 * Determine if the given method name indicates an externally managed
+	 * initialization method, regardless of method visibility.
+	 * <p>In contrast to {@link #isExternallyManagedInitMethod(String)}, this
+	 * method also returns {@code true} if there is a {@code private} externally
+	 * managed initialization method that has been
+	 * {@linkplain #registerExternallyManagedInitMethod(String) registered}
+	 * using a qualified method name instead of a simple method name.
+	 * @since 5.3.17
+	 */
+	boolean hasAnyExternallyManagedInitMethod(String initMethod) {
+		synchronized (this.postProcessingLock) {
+			if (isExternallyManagedInitMethod(initMethod)) {
+				return true;
+			}
+			return hasAnyExternallyManagedMethod(this.externallyManagedInitMethods, initMethod);
+		}
+	}
+
+	/**
+	 * Get all externally managed initialization methods (as an immutable Set).
+	 * <p>See {@link #registerExternallyManagedInitMethod} for details
+	 * regarding the format for the initialization methods in the returned set.
 	 * @since 5.3.11
 	 */
 	public Set<String> getExternallyManagedInitMethods() {
@@ -492,7 +563,24 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Register an externally managed configuration destruction method.
+	 * Resolve the inferred destroy method if necessary.
+	 * @since 6.0
+	 */
+	public void resolveDestroyMethodIfNecessary() {
+		setDestroyMethodNames(DisposableBeanAdapter
+				.inferDestroyMethodsIfNecessary(getResolvableType().toClass(), this));
+	}
+
+	/**
+	 * Register an externally managed configuration destruction method &mdash;
+	 * for example, a method annotated with JSR-250's
+	 * {@link jakarta.annotation.PreDestroy} annotation.
+	 * <p>The supplied {@code destroyMethod} may be the
+	 * {@linkplain Method#getName() simple method name} for non-private methods or the
+	 * {@linkplain org.springframework.util.ClassUtils#getQualifiedMethodName(Method)
+	 * qualified method name} for {@code private} methods. A qualified name is
+	 * necessary for {@code private} methods in order to disambiguate between
+	 * multiple private methods with the same name within a class hierarchy.
 	 */
 	public void registerExternallyManagedDestroyMethod(String destroyMethod) {
 		synchronized (this.postProcessingLock) {
@@ -504,7 +592,10 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Check whether the given method name indicates an externally managed destruction method.
+	 * Determine if the given method name indicates an externally managed
+	 * destruction method.
+	 * <p>See {@link #registerExternallyManagedDestroyMethod} for details
+	 * regarding the format for the supplied {@code destroyMethod}.
 	 */
 	public boolean isExternallyManagedDestroyMethod(String destroyMethod) {
 		synchronized (this.postProcessingLock) {
@@ -514,7 +605,43 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
 	}
 
 	/**
-	 * Return all externally managed destruction methods (as an immutable Set).
+	 * Determine if the given method name indicates an externally managed
+	 * destruction method, regardless of method visibility.
+	 * <p>In contrast to {@link #isExternallyManagedDestroyMethod(String)}, this
+	 * method also returns {@code true} if there is a {@code private} externally
+	 * managed destruction method that has been
+	 * {@linkplain #registerExternallyManagedDestroyMethod(String) registered}
+	 * using a qualified method name instead of a simple method name.
+	 * @since 5.3.17
+	 */
+	boolean hasAnyExternallyManagedDestroyMethod(String destroyMethod) {
+		synchronized (this.postProcessingLock) {
+			if (isExternallyManagedDestroyMethod(destroyMethod)) {
+				return true;
+			}
+			return hasAnyExternallyManagedMethod(this.externallyManagedDestroyMethods, destroyMethod);
+		}
+	}
+
+	private static boolean hasAnyExternallyManagedMethod(Set<String> candidates, String methodName) {
+		if (candidates != null) {
+			for (String candidate : candidates) {
+				int indexOfDot = candidate.lastIndexOf('.');
+				if (indexOfDot > 0) {
+					String candidateMethodName = candidate.substring(indexOfDot + 1);
+					if (candidateMethodName.equals(methodName)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Get all externally managed destruction methods (as an immutable Set).
+	 * <p>See {@link #registerExternallyManagedDestroyMethod} for details
+	 * regarding the format for the destruction methods in the returned set.
 	 * @since 5.3.11
 	 */
 	public Set<String> getExternallyManagedDestroyMethods() {

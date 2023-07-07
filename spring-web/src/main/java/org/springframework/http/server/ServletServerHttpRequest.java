@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,8 +56,6 @@ import org.springframework.util.StringUtils;
  */
 public class ServletServerHttpRequest implements ServerHttpRequest {
 
-	protected static final String FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
-
 	protected static final Charset FORM_CHARSET = StandardCharsets.UTF_8;
 
 
@@ -92,14 +90,8 @@ public class ServletServerHttpRequest implements ServerHttpRequest {
 	}
 
 	@Override
-	@Nullable
 	public HttpMethod getMethod() {
-		return HttpMethod.resolve(this.servletRequest.getMethod());
-	}
-
-	@Override
-	public String getMethodValue() {
-		return this.servletRequest.getMethod();
+		return HttpMethod.valueOf(this.servletRequest.getMethod());
 	}
 
 	@Override
@@ -158,7 +150,9 @@ public class ServletServerHttpRequest implements ServerHttpRequest {
 					String requestContentType = this.servletRequest.getContentType();
 					if (StringUtils.hasLength(requestContentType)) {
 						contentType = MediaType.parseMediaType(requestContentType);
-						this.headers.setContentType(contentType);
+						if (contentType.isConcrete()) {
+							this.headers.setContentType(contentType);
+						}
 					}
 				}
 				if (contentType != null && contentType.getCharset() == null) {
@@ -195,7 +189,7 @@ public class ServletServerHttpRequest implements ServerHttpRequest {
 
 	@Override
 	public InetSocketAddress getLocalAddress() {
-		return new InetSocketAddress(this.servletRequest.getLocalName(), this.servletRequest.getLocalPort());
+		return new InetSocketAddress(this.servletRequest.getLocalAddr(), this.servletRequest.getLocalPort());
 	}
 
 	@Override
@@ -228,7 +222,7 @@ public class ServletServerHttpRequest implements ServerHttpRequest {
 
 	private static boolean isFormPost(HttpServletRequest request) {
 		String contentType = request.getContentType();
-		return (contentType != null && contentType.contains(FORM_CONTENT_TYPE) &&
+		return (contentType != null && contentType.contains(MediaType.APPLICATION_FORM_URLENCODED_VALUE) &&
 				HttpMethod.POST.matches(request.getMethod()));
 	}
 

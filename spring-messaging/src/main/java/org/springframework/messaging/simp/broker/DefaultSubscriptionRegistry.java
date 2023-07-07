@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,13 +54,16 @@ import org.springframework.util.StringUtils;
  * in memory and uses a {@link org.springframework.util.PathMatcher PathMatcher}
  * for matching destinations.
  *
- * <p>As of 4.2, this class supports a {@link #setSelectorHeaderName selector}
- * header on subscription messages with Spring EL expressions evaluated against
- * the headers to filter out messages in addition to destination matching.
+ * <p>This class also supports an optional <em>selector</em> header on subscription
+ * messages with Spring Expression Language (SpEL) expressions evaluated against
+ * the headers to filter out messages in addition to destination matching. As of
+ * Spring Framework 6.1, the SpEL support is disabled by default, but it can be
+ * enabled by setting a {@linkplain #setSelectorHeaderName selector header name}.
  *
  * @author Rossen Stoyanchev
  * @author Sebastien Deleuze
  * @author Juergen Hoeller
+ * @author Sam Brannen
  * @since 4.0
  */
 public class DefaultSubscriptionRegistry extends AbstractSubscriptionRegistry {
@@ -78,7 +81,7 @@ public class DefaultSubscriptionRegistry extends AbstractSubscriptionRegistry {
 	private int cacheLimit = DEFAULT_CACHE_LIMIT;
 
 	@Nullable
-	private String selectorHeaderName = "selector";
+	private String selectorHeaderName;
 
 	private volatile boolean selectorHeaderInUse;
 
@@ -121,16 +124,19 @@ public class DefaultSubscriptionRegistry extends AbstractSubscriptionRegistry {
 
 	/**
 	 * Configure the name of a header that a subscription message can have for
-	 * the purpose of filtering messages matched to the subscription. The header
-	 * value is expected to be a Spring EL boolean expression to be applied to
-	 * the headers of messages matched to the subscription.
+	 * the purpose of filtering messages matched to the subscription.
+	 * <p>The header value is expected to be a Spring Expression Language (SpEL)
+	 * boolean expression to be applied to the headers of messages matched to the
+	 * subscription.
 	 * <p>For example:
-	 * <pre>
+	 * <pre style="code">
 	 * headers.foo == 'bar'
 	 * </pre>
-	 * <p>By default this is set to "selector". You can set it to a different
-	 * name, or to {@code null} to turn off support for a selector header.
-	 * @param selectorHeaderName the name to use for a selector header
+	 * <p>By default the selector header name is set to {@code null} which disables
+	 * this feature. You can set it to {@code "selector"} or a different name to
+	 * enable support for a selector header.
+	 * @param selectorHeaderName the name to use for a selector header, or {@code null}
+	 * or blank to disable selector header support
 	 * @since 4.2
 	 */
 	public void setSelectorHeaderName(@Nullable String selectorHeaderName) {
@@ -138,8 +144,9 @@ public class DefaultSubscriptionRegistry extends AbstractSubscriptionRegistry {
 	}
 
 	/**
-	 * Return the name for the selector header name.
+	 * Return the name of the selector header.
 	 * @since 4.2
+	 * @see #setSelectorHeaderName(String)
 	 */
 	@Nullable
 	public String getSelectorHeaderName() {
@@ -474,9 +481,8 @@ public class DefaultSubscriptionRegistry extends AbstractSubscriptionRegistry {
 		}
 
 		@Override
-		public boolean equals(@Nullable Object other) {
-			return (this == other ||
-					(other instanceof Subscription && this.id.equals(((Subscription) other).id)));
+		public boolean equals(@Nullable Object obj) {
+			return (this == obj || (obj instanceof Subscription that && this.id.equals(that.id)));
 		}
 
 		@Override
@@ -507,8 +513,8 @@ public class DefaultSubscriptionRegistry extends AbstractSubscriptionRegistry {
 		@SuppressWarnings("rawtypes")
 		public TypedValue read(EvaluationContext context, @Nullable Object target, String name) {
 			Object value;
-			if (target instanceof Message) {
-				value = name.equals("headers") ? ((Message) target).getHeaders() : null;
+			if (target instanceof Message message) {
+				value = name.equals("headers") ? message.getHeaders() : null;
 			}
 			else if (target instanceof MessageHeaders headers) {
 				SimpMessageHeaderAccessor accessor =

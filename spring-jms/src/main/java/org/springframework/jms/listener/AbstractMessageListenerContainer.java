@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,13 +46,13 @@ import org.springframework.util.ErrorHandler;
  *
  * <p><b>NOTE:</b> The default behavior of this message listener container is to
  * <b>never</b> propagate an exception thrown by a message listener up to the JMS
- * provider. Instead, it will log any such exception at the error level.
+ * provider. Instead, it will log any such exception at {@code WARN} level.
  * This means that from the perspective of the attendant JMS provider no such
  * listener will ever fail. However, if error handling is necessary, then
- * any implementation of the {@link ErrorHandler} strategy may be provided to
+ * an implementation of the {@link ErrorHandler} strategy may be provided to
  * the {@link #setErrorHandler(ErrorHandler)} method. Note that JMSExceptions
- * <b>will</b> be passed to the ErrorHandler in addition to (but after) being
- * passed to an {@link ExceptionListener}, if one has been provided.
+ * <b>will</b> be passed to the {@code ErrorHandler} in addition to (but after)
+ * being passed to an {@link ExceptionListener}, if one has been provided.
  *
  * <p>The listener container offers the following message acknowledgment options:
  * <ul>
@@ -210,7 +210,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 */
 	@Nullable
 	public Destination getDestination() {
-		return (this.destination instanceof Destination ? (Destination) this.destination : null);
+		return (this.destination instanceof Destination _destination ? _destination : null);
 	}
 
 	/**
@@ -236,7 +236,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 */
 	@Nullable
 	public String getDestinationName() {
-		return (this.destination instanceof String ? (String) this.destination : null);
+		return (this.destination instanceof String name ? name : null);
 	}
 
 	/**
@@ -326,8 +326,8 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 * @see SubscriptionNameProvider
 	 */
 	protected String getDefaultSubscriptionName(Object messageListener) {
-		if (messageListener instanceof SubscriptionNameProvider) {
-			return ((SubscriptionNameProvider) messageListener).getSubscriptionName();
+		if (messageListener instanceof SubscriptionNameProvider subscriptionNameProvider) {
+			return subscriptionNameProvider.getSubscriptionName();
 		}
 		else {
 			return messageListener.getClass().getName();
@@ -465,7 +465,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 
 	/**
 	 * Configure the reply destination type. By default, the configured {@code pubSubDomain}
-	 * value is used (see {@link #isPubSubDomain()}.
+	 * value is used (see {@link #isPubSubDomain()}).
 	 * <p>This setting primarily indicates what type of destination to resolve if dynamic
 	 * destinations are enabled.
 	 * @param replyPubSubDomain "true" for the Publish/Subscribe domain ({@link Topic Topics}),
@@ -496,8 +496,8 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	/**
 	 * Configure the {@link QosSettings} to use when sending a reply. Can be set to
 	 * {@code null} to indicate that the broker's defaults should be used.
-	 * @param replyQosSettings the QoS settings to use when sending a reply or {@code null}
-	 * to use the default vas.
+	 * @param replyQosSettings the QoS settings to use when sending a reply, or
+	 * {@code null} to use the default value
 	 * @since 5.0
 	 */
 	public void setReplyQosSettings(@Nullable QosSettings replyQosSettings) {
@@ -542,8 +542,8 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	}
 
 	/**
-	 * Set the ErrorHandler to be invoked in case of any uncaught exceptions thrown
-	 * while processing a Message.
+	 * Set the {@link ErrorHandler} to be invoked in case of any uncaught exceptions
+	 * thrown while processing a {@link Message}.
 	 * <p>By default, there will be <b>no</b> ErrorHandler so that error-level
 	 * logging is the only result.
 	 */
@@ -552,8 +552,8 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	}
 
 	/**
-	 * Return the ErrorHandler to be invoked in case of any uncaught exceptions thrown
-	 * while processing a Message.
+	 * Return the {@link ErrorHandler} to be invoked in case of any uncaught exceptions
+	 * thrown while processing a {@link Message}.
 	 * @since 4.1
 	 */
 	@Nullable
@@ -634,7 +634,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 * Execute the specified listener,
 	 * committing or rolling back the transaction afterwards (if necessary).
 	 * @param session the JMS Session to operate on
-	 * @param message the received JMS Message
+	 * @param message the received JMS {@link Message}
 	 * @see #invokeListener
 	 * @see #commitIfNecessary
 	 * @see #rollbackOnExceptionIfNecessary
@@ -653,7 +653,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 * Execute the specified listener,
 	 * committing or rolling back the transaction afterwards (if necessary).
 	 * @param session the JMS Session to operate on
-	 * @param message the received JMS Message
+	 * @param message the received JMS {@link Message}
 	 * @throws JMSException if thrown by JMS API methods
 	 * @see #invokeListener
 	 * @see #commitIfNecessary
@@ -684,7 +684,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 * Invoke the specified listener: either as standard JMS MessageListener
 	 * or (preferably) as Spring SessionAwareMessageListener.
 	 * @param session the JMS Session to operate on
-	 * @param message the received JMS Message
+	 * @param message the received JMS {@link Message}
 	 * @throws JMSException if thrown by JMS API methods
 	 * @see #setMessageListener
 	 */
@@ -692,11 +692,11 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	protected void invokeListener(Session session, Message message) throws JMSException {
 		Object listener = getMessageListener();
 
-		if (listener instanceof SessionAwareMessageListener) {
-			doInvokeListener((SessionAwareMessageListener) listener, session, message);
+		if (listener instanceof SessionAwareMessageListener sessionAwareMessageListener) {
+			doInvokeListener(sessionAwareMessageListener, session, message);
 		}
-		else if (listener instanceof MessageListener) {
-			doInvokeListener((MessageListener) listener, message);
+		else if (listener instanceof MessageListener msgListener) {
+			doInvokeListener(msgListener, message);
 		}
 		else if (listener != null) {
 			throw new IllegalArgumentException(
@@ -713,7 +713,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 * to the listener if demanded.
 	 * @param listener the Spring SessionAwareMessageListener to invoke
 	 * @param session the JMS Session to operate on
-	 * @param message the received JMS Message
+	 * @param message the received JMS {@link Message}
 	 * @throws JMSException if thrown by JMS API methods
 	 * @see SessionAwareMessageListener
 	 * @see #setExposeListenerSession
@@ -749,11 +749,11 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	}
 
 	/**
-	 * Invoke the specified listener as standard JMS MessageListener.
+	 * Invoke the specified listener as standard JMS {@link MessageListener}.
 	 * <p>Default implementation performs a plain invocation of the
 	 * {@code onMessage} method.
-	 * @param listener the JMS MessageListener to invoke
-	 * @param message the received JMS Message
+	 * @param listener the JMS {@code MessageListener} to invoke
+	 * @param message the received JMS {@link Message}
 	 * @throws JMSException if thrown by JMS API methods
 	 * @see jakarta.jms.MessageListener#onMessage
 	 */
@@ -763,8 +763,8 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 
 	/**
 	 * Perform a commit or message acknowledgement, as appropriate.
-	 * @param session the JMS Session to commit
-	 * @param message the Message to acknowledge
+	 * @param session the JMS {@link Session} to commit
+	 * @param message the {@link Message} to acknowledge
 	 * @throws jakarta.jms.JMSException in case of commit failure
 	 */
 	protected void commitIfNecessary(Session session, @Nullable Message message) throws JMSException {
@@ -853,15 +853,15 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 * @throws jakarta.jms.JMSException if thrown by JMS API methods
 	 */
 	protected MessageConsumer createConsumer(Session session, Destination destination) throws JMSException {
-		if (isPubSubDomain() && destination instanceof Topic) {
+		if (isPubSubDomain() && destination instanceof Topic topic) {
 			if (isSubscriptionShared()) {
 				return (isSubscriptionDurable() ?
-						session.createSharedDurableConsumer((Topic) destination, getSubscriptionName(), getMessageSelector()) :
-						session.createSharedConsumer((Topic) destination, getSubscriptionName(), getMessageSelector()));
+						session.createSharedDurableConsumer(topic, getSubscriptionName(), getMessageSelector()) :
+						session.createSharedConsumer(topic, getSubscriptionName(), getMessageSelector()));
 			}
 			else if (isSubscriptionDurable()) {
 				return session.createDurableSubscriber(
-						(Topic) destination, getSubscriptionName(), getMessageSelector(), isPubSubNoLocal());
+						topic, getSubscriptionName(), getMessageSelector(), isPubSubNoLocal());
 			}
 			else {
 				// Only pass in the NoLocal flag in case of a Topic (pub-sub mode):
@@ -877,7 +877,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 
 	/**
 	 * Handle the given exception that arose during listener execution.
-	 * <p>The default implementation logs the exception at warn level,
+	 * <p>The default implementation logs the exception at {@code WARN} level,
 	 * not propagating it to the JMS provider &mdash; assuming that all handling of
 	 * acknowledgement and/or transactions is done by this listener container.
 	 * This can be overridden in subclasses.
@@ -888,8 +888,8 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 			// Internal exception - has been handled before.
 			return;
 		}
-		if (ex instanceof JMSException) {
-			invokeExceptionListener((JMSException) ex);
+		if (ex instanceof JMSException jmsException) {
+			invokeExceptionListener(jmsException);
 		}
 		if (isActive()) {
 			// Regular case: failed while active.
@@ -916,8 +916,9 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	}
 
 	/**
-	 * Invoke the registered ErrorHandler, if any. Log at warn level otherwise.
-	 * @param ex the uncaught error that arose during JMS processing.
+	 * Invoke the registered {@link #getErrorHandler() ErrorHandler} if any.
+	 * Log at {@code WARN} level otherwise.
+	 * @param ex the uncaught error that arose during JMS processing
 	 * @see #setErrorHandler
 	 */
 	protected void invokeErrorHandler(Throwable ex) {
@@ -933,7 +934,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 
 	/**
 	 * Internal exception class that indicates a rejected message on shutdown.
-	 * Used to trigger a rollback for an external transaction manager in that case.
+	 * <p>Used to trigger a rollback for an external transaction manager in that case.
 	 */
 	@SuppressWarnings("serial")
 	private static class MessageRejectedWhileStoppingException extends RuntimeException {

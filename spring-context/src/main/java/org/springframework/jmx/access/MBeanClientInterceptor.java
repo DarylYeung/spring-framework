@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -165,10 +165,10 @@ public class MBeanClientInterceptor
 	}
 
 	/**
-	 * Allow Map access to the environment to be set for the connector,
+	 * Allow {@code Map} access to the environment to be set for the connector,
 	 * with the option to add or override specific entries.
 	 * <p>Useful for specifying entries directly, for example via
-	 * "environment[myKey]". This is particularly useful for
+	 * {@code environment[myKey]}. This is particularly useful for
 	 * adding or overriding entries in child bean definitions.
 	 */
 	@Nullable
@@ -189,9 +189,9 @@ public class MBeanClientInterceptor
 	}
 
 	/**
-	 * Set whether or not the proxy should connect to the {@code MBeanServer}
-	 * at creation time ("true") or the first time it is invoked ("false").
-	 * Default is "true".
+	 * Set whether the proxy should connect to the {@code MBeanServer}
+	 * at creation time ({@code true}) or the first time it is invoked
+	 * ({@code false}). Default is {@code true}.
 	 */
 	public void setConnectOnStartup(boolean connectOnStartup) {
 		this.connectOnStartup = connectOnStartup;
@@ -199,7 +199,7 @@ public class MBeanClientInterceptor
 
 	/**
 	 * Set whether to refresh the MBeanServer connection on connect failure.
-	 * Default is "false".
+	 * Default is {@code false}.
 	 * <p>Can be turned on to allow for hot restart of the JMX server,
 	 * automatically reconnecting and retrying in case of an IOException.
 	 */
@@ -441,11 +441,11 @@ public class MBeanClientInterceptor
 		catch (RuntimeOperationsException ex) {
 			// This one is only thrown by the JMX 1.2 RI, not by the JDK 1.5 JMX code.
 			RuntimeException rex = ex.getTargetException();
-			if (rex instanceof RuntimeMBeanException) {
-				throw ((RuntimeMBeanException) rex).getTargetException();
+			if (rex instanceof RuntimeMBeanException runtimeMBeanException) {
+				throw runtimeMBeanException.getTargetException();
 			}
-			else if (rex instanceof RuntimeErrorException) {
-				throw ((RuntimeErrorException) rex).getTargetError();
+			else if (rex instanceof RuntimeErrorException runtimeErrorException) {
+				throw runtimeErrorException.getTargetError();
 			}
 			else {
 				throw rex;

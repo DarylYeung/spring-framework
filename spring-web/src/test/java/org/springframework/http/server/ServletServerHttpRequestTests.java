@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ public class ServletServerHttpRequestTests {
 
 	@Test
 	void getUriForSimplePath() throws URISyntaxException {
-		URI uri = new URI("https://example.com/path");
+		URI uri = URI.create("https://example.com/path");
 		mockRequest.setScheme(uri.getScheme());
 		mockRequest.setServerName(uri.getHost());
 		mockRequest.setServerPort(uri.getPort());
@@ -70,7 +70,7 @@ public class ServletServerHttpRequestTests {
 
 	@Test
 	void getUriWithQueryString() throws URISyntaxException {
-		URI uri = new URI("https://example.com/path?query");
+		URI uri = URI.create("https://example.com/path?query");
 		mockRequest.setScheme(uri.getScheme());
 		mockRequest.setServerName(uri.getHost());
 		mockRequest.setServerPort(uri.getPort());
@@ -86,7 +86,7 @@ public class ServletServerHttpRequestTests {
 		mockRequest.setServerName("example.com");
 		mockRequest.setRequestURI("/path");
 		mockRequest.setQueryString("query=foo");
-		assertThat(request.getURI()).isEqualTo(new URI("https://example.com/path?query=foo"));
+		assertThat(request.getURI()).isEqualTo(URI.create("https://example.com/path?query=foo"));
 	}
 
 	@Test  // SPR-16414
@@ -96,12 +96,12 @@ public class ServletServerHttpRequestTests {
 		mockRequest.setServerName("example.com");
 		mockRequest.setRequestURI("/path");
 		mockRequest.setQueryString("query=foo%%x");
-		assertThat(request.getURI()).isEqualTo(new URI("https://example.com/path"));
+		assertThat(request.getURI()).isEqualTo(URI.create("https://example.com/path"));
 	}
 
 	@Test  // SPR-13876
 	void getUriWithEncoding() throws URISyntaxException {
-		URI uri = new URI("https://example.com/%E4%B8%AD%E6%96%87" +
+		URI uri = URI.create("https://example.com/%E4%B8%AD%E6%96%87" +
 				"?redirect=https%3A%2F%2Fgithub.com%2Fspring-projects%2Fspring-framework");
 		mockRequest.setScheme(uri.getScheme());
 		mockRequest.setServerName(uri.getHost());
@@ -149,6 +149,13 @@ public class ServletServerHttpRequestTests {
 		assertThat(headerValues.contains(headerValue1)).as("Invalid header values returned").isTrue();
 		assertThat(headerValues.contains(headerValue2)).as("Invalid header values returned").isTrue();
 		assertThat(headers.getContentType()).isNull();
+	}
+
+	@Test // gh-27957
+	void getHeadersWithWildcardContentType() {
+		mockRequest.setContentType("*/*");
+		mockRequest.removeHeader("Content-Type");
+		assertThat(request.getHeaders()).as("Invalid content-type should not raise exception").isEmpty();
 	}
 
 	@Test

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,9 @@ import reactor.core.publisher.Flux;
 
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseCookie;
+import org.springframework.http.support.JettyHeadersAdapter;
 import org.springframework.lang.Nullable;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.LinkedMultiValueMap;
@@ -44,7 +45,7 @@ import org.springframework.util.MultiValueMap;
  */
 class JettyClientHttpResponse implements ClientHttpResponse {
 
-	private static final Pattern SAMESITE_PATTERN = Pattern.compile("(?i).*SameSite=(Strict|Lax|None).*");
+	private static final Pattern SAME_SITE_PATTERN = Pattern.compile("(?i).*SameSite=(Strict|Lax|None).*");
 
 
 	private final ReactiveResponse reactiveResponse;
@@ -64,13 +65,8 @@ class JettyClientHttpResponse implements ClientHttpResponse {
 
 
 	@Override
-	public HttpStatus getStatusCode() {
-		return HttpStatus.valueOf(getRawStatusCode());
-	}
-
-	@Override
-	public int getRawStatusCode() {
-		return this.reactiveResponse.getStatus();
+	public HttpStatusCode getStatusCode() {
+		return HttpStatusCode.valueOf(this.reactiveResponse.getStatus());
 	}
 
 	@Override
@@ -95,7 +91,7 @@ class JettyClientHttpResponse implements ClientHttpResponse {
 
 	@Nullable
 	private static String parseSameSite(String headerValue) {
-		Matcher matcher = SAMESITE_PATTERN.matcher(headerValue);
+		Matcher matcher = SAME_SITE_PATTERN.matcher(headerValue);
 		return (matcher.matches() ? matcher.group(1) : null);
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,8 +53,6 @@ import org.springframework.util.ClassUtils;
  * <li>{@link MapperFeature#DEFAULT_VIEW_INCLUSION} is disabled</li>
  * <li>{@link DeserializationFeature#FAIL_ON_UNKNOWN_PROPERTIES} is disabled</li>
  * </ul>
- *
- * <p>Compatible with Jackson 2.9 to 2.12, as of Spring 5.3.
  *
  * @author Mark Pollack
  * @author Dave Syer
@@ -179,16 +177,11 @@ public class MappingJackson2MessageConverter implements SmartMessageConverter, B
 	public Message toMessage(Object object, Session session) throws JMSException, MessageConversionException {
 		Message message;
 		try {
-			switch (this.targetType) {
-				case TEXT:
-					message = mapToTextMessage(object, session, this.objectMapper.writer());
-					break;
-				case BYTES:
-					message = mapToBytesMessage(object, session, this.objectMapper.writer());
-					break;
-				default:
-					message = mapToMessage(object, session, this.objectMapper.writer(), this.targetType);
-			}
+			message = switch (this.targetType) {
+				case TEXT -> mapToTextMessage(object, session, this.objectMapper.writer());
+				case BYTES -> mapToBytesMessage(object, session, this.objectMapper.writer());
+				default -> mapToMessage(object, session, this.objectMapper.writer(), this.targetType);
+			};
 		}
 		catch (IOException ex) {
 			throw new MessageConversionException("Could not map JSON object [" + object + "]", ex);
@@ -242,16 +235,11 @@ public class MappingJackson2MessageConverter implements SmartMessageConverter, B
 
 		Message message;
 		try {
-			switch (this.targetType) {
-				case TEXT:
-					message = mapToTextMessage(object, session, objectWriter);
-					break;
-				case BYTES:
-					message = mapToBytesMessage(object, session, objectWriter);
-					break;
-				default:
-					message = mapToMessage(object, session, objectWriter, this.targetType);
-			}
+			message = switch (this.targetType) {
+				case TEXT -> mapToTextMessage(object, session, objectWriter);
+				case BYTES -> mapToBytesMessage(object, session, objectWriter);
+				default -> mapToMessage(object, session, objectWriter, this.targetType);
+			};
 		}
 		catch (IOException ex) {
 			throw new MessageConversionException("Could not map JSON object [" + object + "]", ex);
@@ -360,11 +348,11 @@ public class MappingJackson2MessageConverter implements SmartMessageConverter, B
 	 * Convenience method to dispatch to converters for individual message types.
 	 */
 	private Object convertToObject(Message message, JavaType targetJavaType) throws JMSException, IOException {
-		if (message instanceof TextMessage) {
-			return convertFromTextMessage((TextMessage) message, targetJavaType);
+		if (message instanceof TextMessage textMessage) {
+			return convertFromTextMessage(textMessage, targetJavaType);
 		}
-		else if (message instanceof BytesMessage) {
-			return convertFromBytesMessage((BytesMessage) message, targetJavaType);
+		else if (message instanceof BytesMessage bytesMessage) {
+			return convertFromBytesMessage(bytesMessage, targetJavaType);
 		}
 		else {
 			return convertFromMessage(message, targetJavaType);
@@ -486,11 +474,11 @@ public class MappingJackson2MessageConverter implements SmartMessageConverter, B
 			}
 			return extractViewClass(annotation, conversionHint);
 		}
-		else if (conversionHint instanceof JsonView) {
-			return extractViewClass((JsonView) conversionHint, conversionHint);
+		else if (conversionHint instanceof JsonView jsonView) {
+			return extractViewClass(jsonView, conversionHint);
 		}
-		else if (conversionHint instanceof Class) {
-			return (Class<?>) conversionHint;
+		else if (conversionHint instanceof Class<?> clazz) {
+			return clazz;
 		}
 		else {
 			return null;

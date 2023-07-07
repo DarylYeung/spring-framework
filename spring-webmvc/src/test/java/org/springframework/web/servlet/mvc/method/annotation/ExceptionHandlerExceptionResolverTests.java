@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.net.SocketTimeoutException;
 import java.util.Collections;
 import java.util.Locale;
 
+import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,7 +62,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.resource.ResourceHttpRequestHandler;
 import org.springframework.web.testfixture.servlet.MockHttpServletRequest;
 import org.springframework.web.testfixture.servlet.MockHttpServletResponse;
-import org.springframework.web.util.NestedServletException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -228,7 +228,7 @@ public class ExceptionHandlerExceptionResolverTests {
 		ModelAndView mav = this.resolver.resolveException(this.request, this.response, handlerMethod, ex);
 
 		assertThat(mav).isNotNull();
-		assertThat(mav.getModelMap().size()).isEqualTo(1);
+		assertThat(mav.getModelMap()).hasSize(1);
 		assertThat(mav.getModelMap().get("exceptionClassName")).isEqualTo("IllegalArgumentException");
 	}
 
@@ -315,7 +315,7 @@ public class ExceptionHandlerExceptionResolverTests {
 		AssertionError err = new AssertionError("argh");
 		HandlerMethod handlerMethod = new HandlerMethod(new ResponseBodyController(), "handle");
 		ModelAndView mav = this.resolver.resolveException(this.request, this.response, handlerMethod,
-				new NestedServletException("Handler dispatch failed", err));
+				new ServletException("Handler dispatch failed", err));
 
 		assertThat(mav).as("Exception was not handled").isNotNull();
 		assertThat(mav.isEmpty()).isTrue();
@@ -340,7 +340,7 @@ public class ExceptionHandlerExceptionResolverTests {
 	}
 
 	@Test //gh-27156
-	void resolveExceptionWithReasonResovledByMessageSource() throws Exception {
+	void resolveExceptionWithReasonResolvedByMessageSource() throws Exception {
 		AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(MyConfig.class);
 		StaticApplicationContext context = new StaticApplicationContext(ctx);
 		Locale locale = Locale.ENGLISH;
@@ -358,7 +358,7 @@ public class ExceptionHandlerExceptionResolverTests {
 		assertThat(mav.isEmpty()).isTrue();
 		assertThat(this.response.getStatus()).isEqualTo(HttpStatus.GATEWAY_TIMEOUT.value());
 		assertThat(this.response.getErrorMessage()).isEqualTo("Gateway Timeout");
-		assertThat(this.response.getContentAsString()).isEqualTo("");
+		assertThat(this.response.getContentAsString()).isEmpty();
 	}
 
 	@Test
@@ -438,8 +438,8 @@ public class ExceptionHandlerExceptionResolverTests {
 
 
 	private void assertMethodProcessorCount(int resolverCount, int handlerCount) {
-		assertThat(this.resolver.getArgumentResolvers().getResolvers().size()).isEqualTo(resolverCount);
-		assertThat(this.resolver.getReturnValueHandlers().getHandlers().size()).isEqualTo(handlerCount);
+		assertThat(this.resolver.getArgumentResolvers().getResolvers()).hasSize(resolverCount);
+		assertThat(this.resolver.getReturnValueHandlers().getHandlers()).hasSize(handlerCount);
 	}
 
 

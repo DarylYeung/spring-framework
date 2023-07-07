@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,7 +136,10 @@ public interface BeanFactory {
 	 * <p>Translates aliases back to the corresponding canonical bean name.
 	 * <p>Will ask the parent factory if the bean cannot be found in this factory instance.
 	 * @param name the name of the bean to retrieve
-	 * @return an instance of the bean
+	 * @return an instance of the bean.
+	 * Note that the return value will never be {@code null} but possibly a stub for
+	 * {@code null} returned from a factory method, to be checked via {@code equals(null)}.
+	 * Consider using {@link #getBeanProvider(Class)} for resolving optional dependencies.
 	 * @throws NoSuchBeanDefinitionException if there is no bean with the specified name
 	 * @throws BeansException if the bean could not be obtained
 	 */
@@ -152,7 +155,11 @@ public interface BeanFactory {
 	 * <p>Will ask the parent factory if the bean cannot be found in this factory instance.
 	 * @param name the name of the bean to retrieve
 	 * @param requiredType type the bean must match; can be an interface or superclass
-	 * @return an instance of the bean
+	 * @return an instance of the bean.
+	 * Note that the return value will never be {@code null}. In case of a stub for
+	 * {@code null} from a factory method having been resolved for the requested bean, a
+	 * {@code BeanNotOfRequiredTypeException} against the NullBean stub will be raised.
+	 * Consider using {@link #getBeanProvider(Class)} for resolving optional dependencies.
 	 * @throws NoSuchBeanDefinitionException if there is no such bean definition
 	 * @throws BeanNotOfRequiredTypeException if the bean is not of the required type
 	 * @throws BeansException if the bean could not be created
@@ -214,6 +221,7 @@ public interface BeanFactory {
 	/**
 	 * Return a provider for the specified bean, allowing for lazy on-demand retrieval
 	 * of instances, including availability and uniqueness options.
+	 * <p>For matching a generic type, consider {@link #getBeanProvider(ResolvableType)}.
 	 * @param requiredType type the bean must match; can be an interface or superclass
 	 * @return a corresponding provider handle
 	 * @since 5.1
@@ -223,13 +231,20 @@ public interface BeanFactory {
 
 	/**
 	 * Return a provider for the specified bean, allowing for lazy on-demand retrieval
-	 * of instances, including availability and uniqueness options.
-	 * @param requiredType type the bean must match; can be a generic type declaration.
-	 * Note that collection types are not supported here, in contrast to reflective
+	 * of instances, including availability and uniqueness options. This variant allows
+	 * for specifying a generic type to match, similar to reflective injection points
+	 * with generic type declarations in method/constructor parameters.
+	 * <p>Note that collections of beans are not supported here, in contrast to reflective
 	 * injection points. For programmatically retrieving a list of beans matching a
 	 * specific type, specify the actual bean type as an argument here and subsequently
 	 * use {@link ObjectProvider#orderedStream()} or its lazy streaming/iteration options.
+	 * <p>Also, generics matching is strict here, as per the Java assignment rules.
+	 * For lenient fallback matching with unchecked semantics (similar to the ´unchecked´
+	 * Java compiler warning), consider calling {@link #getBeanProvider(Class)} with the
+	 * raw type as a second step if no full generic match is
+	 * {@link ObjectProvider#getIfAvailable() available} with this variant.
 	 * @return a corresponding provider handle
+	 * @param requiredType type the bean must match; can be a generic type declaration
 	 * @since 5.1
 	 * @see ObjectProvider#iterator()
 	 * @see ObjectProvider#stream()

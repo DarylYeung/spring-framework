@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,19 +47,18 @@ import org.springframework.web.util.UriUtils;
  * populating the data for their view. The name of this form object can be
  * configured using the {@link #setModelAttribute "modelAttribute"} property.
  *
- * <p>
+ * <h3>Attribute Summary</h3>
  * <table>
- * <caption>Attribute Summary</caption>
  * <thead>
  * <tr>
- * <th class="colFirst">Attribute</th>
- * <th class="colOne">Required?</th>
- * <th class="colOne">Runtime Expression?</th>
- * <th class="colLast">Description</th>
+ * <th class="table-header col-first">Attribute</th>
+ * <th class="table-header col-second">Required?</th>
+ * <th class="table-header col-second">Runtime Expression?</th>
+ * <th class="table-header col-last">Description</th>
  * </tr>
  * </thead>
  * <tbody>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>acceptCharset</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
@@ -69,165 +68,165 @@ import org.springframework.web.util.UriUtils;
  * list, i.e., the server is able to accept any single character encoding per
  * entity received.</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>action</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Required Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>cssClass</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Optional Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>cssStyle</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Optional Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>dir</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Standard Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>enctype</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Optional Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>htmlEscape</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>Enable/disable HTML escaping of rendered values.</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>id</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Standard Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>lang</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Standard Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>method</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Optional Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>methodParam</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>The parameter name used for HTTP methods other then GET and POST.
  * Default is '_method'.</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>modelAttribute</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>Name of the model attribute under which the form object is exposed.
  * Defaults to 'command'.</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>name</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Standard Attribute - added for backwards compatibility cases</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>onclick</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>ondblclick</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>onkeydown</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>onkeypress</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>onkeyup</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>onmousedown</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>onmousemove</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>onmouseout</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>onmouseover</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>onmouseup</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>onreset</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>onsubmit</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Event Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>servletRelativeAction</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>Action reference to be appended to the current servlet path</p></td>
  * </tr>
- * <tr class="altColor">
+ * <tr class="even-row-color">
  * <td><p>target</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
  * <td><p>HTML Optional Attribute</p></td>
  * </tr>
- * <tr class="rowColor">
+ * <tr class="odd-row-color">
  * <td><p>title</p></td>
  * <td><p>false</p></td>
  * <td><p>true</p></td>
@@ -652,8 +651,8 @@ public class FormTag extends AbstractHtmlElementTag {
 				// shouldn't happen - if it does, proceed with requestUri as-is
 			}
 			ServletResponse response = this.pageContext.getResponse();
-			if (response instanceof HttpServletResponse) {
-				requestUri = ((HttpServletResponse) response).encodeURL(requestUri);
+			if (response instanceof HttpServletResponse httpServletResponse) {
+				requestUri = httpServletResponse.encodeURL(requestUri);
 				String queryString = getRequestContext().getQueryString();
 				if (StringUtils.hasText(queryString)) {
 					requestUri += "?" + HtmlUtils.htmlEscape(queryString);
@@ -676,8 +675,8 @@ public class FormTag extends AbstractHtmlElementTag {
 	private String processAction(String action) {
 		RequestDataValueProcessor processor = getRequestContext().getRequestDataValueProcessor();
 		ServletRequest request = this.pageContext.getRequest();
-		if (processor != null && request instanceof HttpServletRequest) {
-			action = processor.processAction((HttpServletRequest) request, action, getHttpMethod());
+		if (processor != null && request instanceof HttpServletRequest httpServletRequest) {
+			action = processor.processAction(httpServletRequest, action, getHttpMethod());
 		}
 		return action;
 	}
@@ -690,8 +689,8 @@ public class FormTag extends AbstractHtmlElementTag {
 	public int doEndTag() throws JspException {
 		RequestDataValueProcessor processor = getRequestContext().getRequestDataValueProcessor();
 		ServletRequest request = this.pageContext.getRequest();
-		if (processor != null && request instanceof HttpServletRequest) {
-			writeHiddenFields(processor.getExtraHiddenFields((HttpServletRequest) request));
+		if (processor != null && request instanceof HttpServletRequest httpServletRequest) {
+			writeHiddenFields(processor.getExtraHiddenFields(httpServletRequest));
 		}
 		Assert.state(this.tagWriter != null, "No TagWriter set");
 		this.tagWriter.endTag();

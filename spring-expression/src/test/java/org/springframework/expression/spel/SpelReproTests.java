@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ import org.springframework.expression.MethodResolver;
 import org.springframework.expression.ParserContext;
 import org.springframework.expression.PropertyAccessor;
 import org.springframework.expression.TypedValue;
+import org.springframework.expression.common.TemplateParserContext;
 import org.springframework.expression.spel.standard.SpelExpression;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.ReflectiveMethodResolver;
@@ -62,6 +63,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.util.ObjectUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatException;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
@@ -75,6 +77,9 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
  * @author Sam Brannen
  */
 class SpelReproTests extends AbstractExpressionTests {
+
+	private static final ParserContext DOLLARSQUARE_TEMPLATE_PARSER_CONTEXT = new TemplateParserContext("$[", "]");
+
 
 	@Test
 	void NPE_SPR5661() {
@@ -104,8 +109,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		expr = new SpelExpressionParser().parseRaw("tryToInvokeWithNull(null)");
 		assertThat(expr.getValue(context)).isNull();
 		expr = new SpelExpressionParser().parseRaw("tryToInvokeWithNull2(null)");
-		assertThatExceptionOfType(EvaluationException.class).isThrownBy(
-				expr::getValue);
+		assertThatExceptionOfType(EvaluationException.class).isThrownBy(expr::getValue);
 		context.setTypeLocator(new MyTypeLocator());
 
 		// varargs
@@ -193,8 +197,8 @@ class SpelReproTests extends AbstractExpressionTests {
 
 	@Test
 	void NPE_SPR5673() {
-		ParserContext hashes = TemplateExpressionParsingTests.HASH_DELIMITED_PARSER_CONTEXT;
-		ParserContext dollars = TemplateExpressionParsingTests.DEFAULT_TEMPLATE_PARSER_CONTEXT;
+		ParserContext hashes = ParserContext.TEMPLATE_EXPRESSION;
+		ParserContext dollars = TemplateExpressionParsingTests.DOLLAR_SIGN_TEMPLATE_PARSER_CONTEXT;
 
 		checkTemplateParsing("abc${'def'} ghi", "abcdef ghi");
 
@@ -209,7 +213,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		checkTemplateParsingError("abc${ } }", "No expression defined within delimiter '${}' at character 3");
 		checkTemplateParsingError("abc$[ } ]", DOLLARSQUARE_TEMPLATE_PARSER_CONTEXT, "Found closing '}' at position 6 without an opening '{'");
 
-		checkTemplateParsing("abc ${\"def''g}hi\"} jkl", "abc def'g}hi jkl");
+		checkTemplateParsing("abc ${\"def''g}hi\"} jkl", "abc def''g}hi jkl");
 		checkTemplateParsing("abc ${'def''g}hi'} jkl", "abc def'g}hi jkl");
 		checkTemplateParsing("}", "}");
 		checkTemplateParsing("${'hello'} world", "hello world");
@@ -378,7 +382,7 @@ class SpelReproTests extends AbstractExpressionTests {
 	}
 
 	private void checkTemplateParsing(String expression, String expectedValue) {
-		checkTemplateParsing(expression, TemplateExpressionParsingTests.DEFAULT_TEMPLATE_PARSER_CONTEXT, expectedValue);
+		checkTemplateParsing(expression, TemplateExpressionParsingTests.DOLLAR_SIGN_TEMPLATE_PARSER_CONTEXT, expectedValue);
 	}
 
 	private void checkTemplateParsing(String expression, ParserContext context, String expectedValue) {
@@ -388,37 +392,21 @@ class SpelReproTests extends AbstractExpressionTests {
 	}
 
 	private void checkTemplateParsingError(String expression, String expectedMessage) {
-		checkTemplateParsingError(expression, TemplateExpressionParsingTests.DEFAULT_TEMPLATE_PARSER_CONTEXT, expectedMessage);
+		checkTemplateParsingError(expression, TemplateExpressionParsingTests.DOLLAR_SIGN_TEMPLATE_PARSER_CONTEXT, expectedMessage);
 	}
 
 	private void checkTemplateParsingError(String expression, ParserContext context, String expectedMessage) {
 		SpelExpressionParser parser = new SpelExpressionParser();
-		assertThatExceptionOfType(Exception.class).isThrownBy(() ->
-				parser.parseExpression(expression, context))
+		assertThatException()
+			.isThrownBy(() -> parser.parseExpression(expression, context))
 			.satisfies(ex -> {
-			String message = ex.getMessage();
-			if (ex instanceof ExpressionException) {
-				message = ((ExpressionException) ex).getSimpleMessage();
-			}
-			assertThat(message).isEqualTo(expectedMessage);
-		});
+				String message = ex.getMessage();
+				if (ex instanceof ExpressionException) {
+					message = ((ExpressionException) ex).getSimpleMessage();
+				}
+				assertThat(message).isEqualTo(expectedMessage);
+			});
 	}
-
-
-	private static final ParserContext DOLLARSQUARE_TEMPLATE_PARSER_CONTEXT = new ParserContext() {
-		@Override
-		public String getExpressionPrefix() {
-			return "$[";
-		}
-		@Override
-		public String getExpressionSuffix() {
-			return "]";
-		}
-		@Override
-		public boolean isTemplate() {
-			return true;
-		}
-	};
 
 	@Test
 	void beanResolution() {
@@ -453,8 +441,8 @@ class SpelReproTests extends AbstractExpressionTests {
 		catch (SpelEvaluationException see) {
 			assertThat(see.getMessageCode()).isEqualTo(SpelMessage.EXCEPTION_DURING_BEAN_RESOLUTION);
 			assertThat(see.getInserts()[0]).isEqualTo("goo");
-			assertThat(see.getCause() instanceof AccessException).isTrue();
-			assertThat(see.getCause().getMessage().startsWith("DONT")).isTrue();
+			assertThat(see.getCause()).isInstanceOf(AccessException.class);
+			assertThat(see.getCause().getMessage()).startsWith("DONT");
 		}
 
 		// bean exists
@@ -485,15 +473,15 @@ class SpelReproTests extends AbstractExpressionTests {
 		assertThat(expr.getValue()).isNull();
 
 		// Different parts of ternary expression are null
-		assertThatExceptionOfType(SpelEvaluationException.class).isThrownBy(() ->
-				new SpelExpressionParser().parseRaw("(?'abc':'default')").getValue(context))
+		assertThatExceptionOfType(SpelEvaluationException.class)
+			.isThrownBy(() -> new SpelExpressionParser().parseRaw("(?'abc':'default')").getValue(context))
 			.satisfies(ex -> assertThat(ex.getMessageCode()).isEqualTo(SpelMessage.TYPE_CONVERSION_ERROR));
 		expr = new SpelExpressionParser().parseRaw("(false?'abc':null)");
 		assertThat(expr.getValue()).isNull();
 
 		// Assignment
-		assertThatExceptionOfType(SpelEvaluationException.class).isThrownBy(() ->
-				new SpelExpressionParser().parseRaw("(='default')").getValue(context))
+		assertThatExceptionOfType(SpelEvaluationException.class)
+			.isThrownBy(() -> new SpelExpressionParser().parseRaw("(='default')").getValue(context))
 			.satisfies(ex -> assertThat(ex.getMessageCode()).isEqualTo(SpelMessage.SETVALUE_NOT_SUPPORTED));
 	}
 
@@ -602,7 +590,7 @@ class SpelReproTests extends AbstractExpressionTests {
 	/**
 	 * Test whether {@link ReflectiveMethodResolver} follows Java Method Invocation
 	 * Conversion order. And more precisely that widening reference conversion is 'higher'
-	 * than a unboxing conversion.
+	 * than an unboxing conversion.
 	 */
 	@Test
 	void conversionPriority_SPR8224() throws Exception {
@@ -637,7 +625,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		ConversionPriority1 target = new ConversionPriority1();
 		MethodExecutor me = new ReflectiveMethodResolver(true).resolve(emptyEvalContext, target, "getX", args);
 		// MethodInvoker chooses getX(int i) when passing Integer
-		final int actual = (Integer) me.execute(emptyEvalContext, target, Integer.valueOf(42)).getValue();
+		final int actual = (Integer) me.execute(emptyEvalContext, target, 42).getValue();
 		// Compiler chooses getX(Number i) when passing Integer
 		final int compiler = target.getX(INTEGER);
 		// Fails!
@@ -646,7 +634,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		ConversionPriority2 target2 = new ConversionPriority2();
 		MethodExecutor me2 = new ReflectiveMethodResolver(true).resolve(emptyEvalContext, target2, "getX", args);
 		// MethodInvoker chooses getX(int i) when passing Integer
-		int actual2 = (Integer) me2.execute(emptyEvalContext, target2, Integer.valueOf(42)).getValue();
+		int actual2 = (Integer) me2.execute(emptyEvalContext, target2, 42).getValue();
 		// Compiler chooses getX(Number i) when passing Integer
 		int compiler2 = target2.getX(INTEGER);
 		// Fails!
@@ -819,7 +807,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		SpelExpressionParser parser = new SpelExpressionParser();
 		SpelExpression expression = parser.parseRaw("T(org.springframework.expression.spel.testresources.le.div.mod.reserved.Reserver).CONST");
 		Object value = expression.getValue(context);
-		assertThat(Reserver.CONST).isEqualTo(value);
+		assertThat(value).isEqualTo(Reserver.CONST);
 	}
 
 	/**
@@ -869,7 +857,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		Expression expression = parser.parseExpression("parseInt('-FF', 16)");
 
 		Integer result = expression.getValue(context, "", Integer.class);
-		assertThat(result.intValue()).isEqualTo(-255);
+		assertThat(result).isEqualTo(-255);
 	}
 
 	@Test
@@ -880,25 +868,25 @@ class SpelReproTests extends AbstractExpressionTests {
 		Object result = null;
 
 		expression = parser.parseExpression("new java.lang.Long[0].class");
-		result = expression.getValue(context, "");
-		assertThat(result.toString()).as("Equal assertion failed: ").isEqualTo("class [Ljava.lang.Long;");
+		result = expression.getValue(context);
+		assertThat(result).asString().isEqualTo("class [Ljava.lang.Long;");
 
 		expression = parser.parseExpression("T(java.lang.Long[])");
-		result = expression.getValue(context, "");
-		assertThat(result.toString()).as("Equal assertion failed: ").isEqualTo("class [Ljava.lang.Long;");
+		result = expression.getValue(context);
+		assertThat(result).asString().isEqualTo("class [Ljava.lang.Long;");
 
 		expression = parser.parseExpression("T(java.lang.String[][][])");
-		result = expression.getValue(context, "");
-		assertThat(result.toString()).as("Equal assertion failed: ").isEqualTo("class [[[Ljava.lang.String;");
+		result = expression.getValue(context);
+		assertThat(result).asString().isEqualTo("class [[[Ljava.lang.String;");
 		assertThat(((SpelExpression) expression).toStringAST()).isEqualTo("T(java.lang.String[][][])");
 
 		expression = parser.parseExpression("new int[0].class");
-		result = expression.getValue(context, "");
-		assertThat(result.toString()).as("Equal assertion failed: ").isEqualTo("class [I");
+		result = expression.getValue(context);
+		assertThat(result).asString().isEqualTo("class [I");
 
 		expression = parser.parseExpression("T(int[][])");
-		result = expression.getValue(context, "");
-		assertThat(result.toString()).isEqualTo("class [[I");
+		result = expression.getValue(context);
+		assertThat(result).asString().isEqualTo("class [[I");
 	}
 
 	@Test
@@ -1232,8 +1220,8 @@ class SpelReproTests extends AbstractExpressionTests {
 	void SPR16123() {
 		ExpressionParser parser = new SpelExpressionParser();
 		parser.parseExpression("simpleProperty").setValue(new BooleanHolder(), null);
-		assertThatExceptionOfType(EvaluationException.class).isThrownBy(() ->
-				parser.parseExpression("primitiveProperty").setValue(new BooleanHolder(), null));
+		assertThatExceptionOfType(EvaluationException.class)
+			.isThrownBy(() -> parser.parseExpression("primitiveProperty").setValue(new BooleanHolder(), null));
 	}
 
 	@Test
@@ -1249,8 +1237,8 @@ class SpelReproTests extends AbstractExpressionTests {
 	}
 
 	private void doTestSpr10146(String expression, String expectedMessage) {
-		assertThatExceptionOfType(SpelParseException.class).isThrownBy(() ->
-				new SpelExpressionParser().parseExpression(expression))
+		assertThatExceptionOfType(SpelParseException.class)
+			.isThrownBy(() -> new SpelExpressionParser().parseExpression(expression))
 			.withMessageContaining(expectedMessage);
 	}
 
@@ -1275,8 +1263,8 @@ class SpelReproTests extends AbstractExpressionTests {
 
 	@Test
 	void SPR10328() {
-		assertThatExceptionOfType(SpelParseException.class).isThrownBy(() ->
-				parser.parseExpression("$[]"))
+		assertThatExceptionOfType(SpelParseException.class)
+			.isThrownBy(() -> parser.parseExpression("$[]"))
 			.withMessageContaining("EL1071E: A required selection expression has not been specified");
 	}
 
@@ -1321,20 +1309,14 @@ class SpelReproTests extends AbstractExpressionTests {
 		assertThat(Array.get(result, 1)).isEqualTo(ABC.B);
 		assertThat(Array.get(result, 2)).isEqualTo(ABC.C);
 
-		context.addMethodResolver(new MethodResolver() {
-			@Override
-			public MethodExecutor resolve(EvaluationContext context, Object targetObject, String name,
-					List<TypeDescriptor> argumentTypes) throws AccessException {
-				return (context1, target, arguments) -> {
-					try {
-						Method method = XYZ.class.getMethod("values");
-						Object value = method.invoke(target, arguments);
-						return new TypedValue(value, new TypeDescriptor(new MethodParameter(method, -1)).narrow(value));
-					}
-					catch (Exception ex) {
-						throw new AccessException(ex.getMessage(), ex);
-					}
-				};
+		context.addMethodResolver((context2, targetObject, name, argumentTypes) -> (context1, target, arguments) -> {
+			try {
+				Method method = XYZ.class.getMethod("values");
+				Object value = method.invoke(target, arguments);
+				return new TypedValue(value, new TypeDescriptor(new MethodParameter(method, -1)).narrow(value));
+			}
+			catch (Exception ex) {
+				throw new AccessException(ex.getMessage(), ex);
 			}
 		});
 
@@ -1363,8 +1345,8 @@ class SpelReproTests extends AbstractExpressionTests {
 		StandardEvaluationContext context = new StandardEvaluationContext();
 		Spr11142 rootObject = new Spr11142();
 		Expression expression = parser.parseExpression("something");
-		assertThatExceptionOfType(SpelEvaluationException.class).isThrownBy(() ->
-				expression.getValue(context, rootObject))
+		assertThatExceptionOfType(SpelEvaluationException.class)
+			.isThrownBy(() -> expression.getValue(context, rootObject))
 			.withMessageContaining("'something' cannot be found");
 	}
 
@@ -1391,7 +1373,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		SpelExpressionParser parser = new SpelExpressionParser();
 		Expression expr = parser.parseExpression("new java.util.ArrayList(#root)");
 		Object value = expr.getValue(coll);
-		assertThat(value instanceof ArrayList).isTrue();
+		assertThat(value).isInstanceOf(ArrayList.class);
 		@SuppressWarnings("rawtypes")
 		ArrayList list = (ArrayList) value;
 		assertThat(list.get(0)).isEqualTo("one");
@@ -1466,7 +1448,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		SpelExpressionParser parser = new SpelExpressionParser();
 		Expression expression = parser.parseExpression("T(java.util.Arrays).asList('')");
 		Object value = expression.getValue();
-		assertThat(value instanceof List).isTrue();
+		assertThat(value).isInstanceOf(List.class);
 		assertThat(((List) value).isEmpty()).isTrue();
 	}
 
@@ -1476,7 +1458,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		sec.setVariable("iterable", Collections.emptyList());
 		SpelExpressionParser parser = new SpelExpressionParser();
 		Expression expression = parser.parseExpression("T(org.springframework.expression.spel.SpelReproTests.FooLists).newArrayList(#iterable)");
-		assertThat(expression.getValue(sec) instanceof ArrayList).isTrue();
+		assertThat(expression.getValue(sec)).isInstanceOf(ArrayList.class);
 	}
 
 	@Test
@@ -1485,13 +1467,13 @@ class SpelReproTests extends AbstractExpressionTests {
 		Expression expression = parser.parseExpression("T(org.springframework.expression.spel.SpelReproTests.DistanceEnforcer).from(#no)");
 		StandardEvaluationContext sec = new StandardEvaluationContext();
 		sec.setVariable("no", 1);
-		assertThat(expression.getValue(sec).toString().startsWith("Integer")).isTrue();
+		assertThat(expression.getValue(sec).toString()).startsWith("Integer");
 		sec = new StandardEvaluationContext();
 		sec.setVariable("no", 1.0F);
-		assertThat(expression.getValue(sec).toString().startsWith("Number")).isTrue();
+		assertThat(expression.getValue(sec).toString()).startsWith("Number");
 		sec = new StandardEvaluationContext();
 		sec.setVariable("no", "1.0");
-		assertThat(expression.getValue(sec).toString().startsWith("Object")).isTrue();
+		assertThat(expression.getValue(sec).toString()).startsWith("Object");
 	}
 
 	@Test
@@ -1535,19 +1517,19 @@ class SpelReproTests extends AbstractExpressionTests {
 		expr = new SpelExpressionParser().parseRaw("&foo");
 		assertThat(expr.getValue(context)).isEqualTo("foo factory");
 
-		assertThatExceptionOfType(SpelParseException.class).isThrownBy(() ->
-				new SpelExpressionParser().parseRaw("&@foo"))
+		assertThatExceptionOfType(SpelParseException.class)
+			.isThrownBy(() -> new SpelExpressionParser().parseRaw("&@foo"))
 			.satisfies(ex -> {
 				assertThat(ex.getMessageCode()).isEqualTo(SpelMessage.INVALID_BEAN_REFERENCE);
 				assertThat(ex.getPosition()).isEqualTo(0);
 			});
 
-		assertThatExceptionOfType(SpelParseException.class).isThrownBy(() ->
-				new SpelExpressionParser().parseRaw("@&foo"))
-		.satisfies(ex -> {
-			assertThat(ex.getMessageCode()).isEqualTo(SpelMessage.INVALID_BEAN_REFERENCE);
-			assertThat(ex.getPosition()).isEqualTo(0);
-		});
+		assertThatExceptionOfType(SpelParseException.class)
+			.isThrownBy(() -> new SpelExpressionParser().parseRaw("@&foo"))
+			.satisfies(ex -> {
+				assertThat(ex.getMessageCode()).isEqualTo(SpelMessage.INVALID_BEAN_REFERENCE);
+				assertThat(ex.getPosition()).isEqualTo(0);
+			});
 	}
 
 	@Test
@@ -1593,12 +1575,12 @@ class SpelReproTests extends AbstractExpressionTests {
 		// #this should be the element from list1
 		Expression ex = parser.parseExpression("#list1.?[#list2.contains(#this)]");
 		Object result = ex.getValue(context);
-		assertThat(result.toString()).isEqualTo("[x]");
+		assertThat(result).asString().isEqualTo("[x]");
 
 		// toString() should be called on the element from list1
 		ex = parser.parseExpression("#list1.?[#list2.contains(toString())]");
 		result = ex.getValue(context);
-		assertThat(result.toString()).isEqualTo("[x]");
+		assertThat(result).asString().isEqualTo("[x]");
 
 		List list3 = new ArrayList();
 		list3.add(1);
@@ -1610,11 +1592,11 @@ class SpelReproTests extends AbstractExpressionTests {
 		context.setVariable("list3", list3);
 		ex = parser.parseExpression("#list3.?[#this > 2]");
 		result = ex.getValue(context);
-		assertThat(result.toString()).isEqualTo("[3, 4]");
+		assertThat(result).asString().isEqualTo("[3, 4]");
 
 		ex = parser.parseExpression("#list3.?[#this >= T(java.lang.Math).abs(T(java.lang.Math).abs(#this))]");
 		result = ex.getValue(context);
-		assertThat(result.toString()).isEqualTo("[1, 2, 3, 4]");
+		assertThat(result).asString().isEqualTo("[1, 2, 3, 4]");
 	}
 
 	@Test
@@ -1634,11 +1616,11 @@ class SpelReproTests extends AbstractExpressionTests {
 		// #this should be the element from list1
 		Expression ex = parser.parseExpression("#map1.?[#map2.containsKey(#this.getKey())]");
 		Object result = ex.getValue(context);
-		assertThat(result.toString()).isEqualTo("{X=66}");
+		assertThat(result).asString().isEqualTo("{X=66}");
 
 		ex = parser.parseExpression("#map1.?[#map2.containsKey(key)]");
 		result = ex.getValue(context);
-		assertThat(result.toString()).isEqualTo("{X=66}");
+		assertThat(result).asString().isEqualTo("{X=66}");
 	}
 
 	@Test
@@ -1817,7 +1799,6 @@ class SpelReproTests extends AbstractExpressionTests {
 	static class CCC {
 
 		public boolean method(Object o) {
-			System.out.println(o);
 			return false;
 		}
 	}
@@ -1889,7 +1870,6 @@ class SpelReproTests extends AbstractExpressionTests {
 	static class Foo2 {
 
 		public void execute(String str) {
-			System.out.println("Value: " + str);
 		}
 	}
 
@@ -1964,7 +1944,6 @@ class SpelReproTests extends AbstractExpressionTests {
 	public static class ReflectionUtil<T extends Number> {
 
 		public Object methodToCall(T param) {
-			System.out.println(param + " " + param.getClass());
 			return "Object methodToCall(T param)";
 		}
 
@@ -2257,7 +2236,7 @@ class SpelReproTests extends AbstractExpressionTests {
 		}
 
 		@Override
-		public boolean equals(Object other) {
+		public boolean equals(@Nullable Object other) {
 			return (this == other || (other instanceof TestClass2 &&
 					this.string.equals(((TestClass2) other).string)));
 		}

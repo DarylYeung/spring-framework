@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,19 +51,20 @@ public abstract class AbstractTransactionalDatabaseClientIntegrationTests  {
 	AnnotationConfigApplicationContext context;
 
 	DatabaseClient databaseClient;
+
 	R2dbcTransactionManager transactionManager;
+
 	TransactionalOperator rxtx;
+
 
 	@BeforeEach
 	public void before() {
-
 		connectionFactory = createConnectionFactory();
 
 		context = new AnnotationConfigApplicationContext();
 		context.getBeanFactory().registerResolvableDependency(ConnectionFactory.class, connectionFactory);
 		context.register(Config.class);
 		context.refresh();
-
 
 		Mono.from(connectionFactory.create())
 				.flatMapMany(connection -> Flux.from(connection.createStatement("DROP TABLE legoset").execute())
@@ -81,6 +82,7 @@ public abstract class AbstractTransactionalDatabaseClientIntegrationTests  {
 	public void tearDown() {
 		context.close();
 	}
+
 
 	/**
 	 * Create a {@link ConnectionFactory} to be used in this test.
@@ -107,17 +109,18 @@ public abstract class AbstractTransactionalDatabaseClientIntegrationTests  {
 		return "INSERT INTO legoset (id, name, manual) VALUES(:id, :name, :manual)";
 	}
 
+
 	@Test
 	public void executeInsertInTransaction() {
-		Flux<Integer> integerFlux = databaseClient
+		Flux<Long> longFlux = databaseClient
 				.sql(getInsertIntoLegosetStatement())
 				.bind(0, 42055)
 				.bind(1, "SCHAUFELRADBAGGER")
 				.bindNull(2, Integer.class)
 				.fetch().rowsUpdated().flux().as(rxtx::transactional);
 
-		integerFlux.as(StepVerifier::create)
-				.expectNext(1)
+		longFlux.as(StepVerifier::create)
+				.expectNext(1L)
 				.verifyComplete();
 
 		databaseClient
@@ -131,7 +134,6 @@ public abstract class AbstractTransactionalDatabaseClientIntegrationTests  {
 
 	@Test
 	public void shouldRollbackTransaction() {
-
 		Mono<Object> integerFlux = databaseClient.sql(getInsertIntoLegosetStatement())
 				.bind(0, 42055)
 				.bind(1, "SCHAUFELRADBAGGER")
@@ -154,7 +156,6 @@ public abstract class AbstractTransactionalDatabaseClientIntegrationTests  {
 
 	@Test
 	public void shouldRollbackTransactionUsingTransactionalOperator() {
-
 		DatabaseClient databaseClient = DatabaseClient.create(connectionFactory);
 
 		TransactionalOperator transactionalOperator = TransactionalOperator
@@ -202,7 +203,6 @@ public abstract class AbstractTransactionalDatabaseClientIntegrationTests  {
 		TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager) {
 			return TransactionalOperator.create(transactionManager);
 		}
-
 	}
 
 }
