@@ -16,8 +16,11 @@
 
 package org.springframework.jms.listener;
 
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import jakarta.jms.Connection;
 import jakarta.jms.ConnectionFactory;
@@ -27,24 +30,30 @@ import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import org.springframework.util.ReflectionUtils;
 import org.springframework.util.backoff.BackOff;
 import org.springframework.util.backoff.BackOffExecution;
 import org.springframework.util.backoff.FixedBackOff;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
+ * Tests for {@link DefaultMessageListenerContainer}.
+ *
  * @author Stephane Nicoll
  * @author Juergen Hoeller
+ * @author Sam Brannen
  */
-public class DefaultMessageListenerContainerTests {
+class DefaultMessageListenerContainerTests {
 
 	@Test
-	public void applyBackOff() {
+	void applyBackOff() {
 		BackOff backOff = mock();
 		BackOffExecution execution = mock();
 		given(execution.nextBackOff()).willReturn(BackOffExecution.STOP);
@@ -65,7 +74,7 @@ public class DefaultMessageListenerContainerTests {
 	}
 
 	@Test
-	public void applyBackOffRetry() {
+	void applyBackOffRetry() {
 		BackOff backOff = mock();
 		BackOffExecution execution = mock();
 		given(execution.nextBackOff()).willReturn(50L, BackOffExecution.STOP);
@@ -84,7 +93,7 @@ public class DefaultMessageListenerContainerTests {
 	}
 
 	@Test
-	public void recoverResetBackOff() {
+	void recoverResetBackOff() {
 		BackOff backOff = mock();
 		BackOffExecution execution = mock();
 		given(execution.nextBackOff()).willReturn(50L, 50L, 50L);  // 3 attempts max
@@ -103,7 +112,7 @@ public class DefaultMessageListenerContainerTests {
 	}
 
 	@Test
-	public void stopAndRestart() {
+	void stopAndRestart() {
 		DefaultMessageListenerContainer container = createRunningContainer();
 		container.stop();
 
@@ -112,7 +121,7 @@ public class DefaultMessageListenerContainerTests {
 	}
 
 	@Test
-	public void stopWithCallbackAndRestart() throws InterruptedException {
+	void stopWithCallbackAndRestart() throws InterruptedException {
 		DefaultMessageListenerContainer container = createRunningContainer();
 
 		TestRunnable stopCallback = new TestRunnable();
@@ -124,7 +133,7 @@ public class DefaultMessageListenerContainerTests {
 	}
 
 	@Test
-	public void stopCallbackIsInvokedEvenIfContainerIsNotRunning() throws InterruptedException {
+	void stopCallbackIsInvokedEvenIfContainerIsNotRunning() throws InterruptedException {
 		DefaultMessageListenerContainer container = createRunningContainer();
 		container.stop();
 
@@ -136,8 +145,34 @@ public class DefaultMessageListenerContainerTests {
 		container.destroy();
 	}
 
+	@Test
+	void setCacheLevelNameToUnsupportedValues() {
+		DefaultMessageListenerContainer container = new DefaultMessageListenerContainer();
+		assertThatIllegalArgumentException().isThrownBy(() -> container.setCacheLevelName(null));
+		assertThatIllegalArgumentException().isThrownBy(() -> container.setCacheLevelName("   "));
+		assertThatIllegalArgumentException().isThrownBy(() -> container.setCacheLevelName("bogus"));
+	}
 
-	private DefaultMessageListenerContainer createRunningContainer() {
+	/**
+	 * This test effectively verifies that the internal 'constants' map is properly
+	 * configured for all cache constants defined in {@link DefaultMessageListenerContainer}.
+	 */
+	@Test
+	void setCacheLevelNameToAllSupportedValues() {
+		DefaultMessageListenerContainer container = new DefaultMessageListenerContainer();
+		streamCacheConstants()
+				.map(Field::getName)
+				.forEach(name -> assertThatNoException().isThrownBy(() -> container.setCacheLevelName(name)));
+	}
+
+
+	private static Stream<Field> streamCacheConstants() {
+		return Arrays.stream(DefaultMessageListenerContainer.class.getFields())
+				.filter(ReflectionUtils::isPublicStaticFinal)
+				.filter(field -> field.getName().startsWith("CACHE_"));
+	}
+
+	private static DefaultMessageListenerContainer createRunningContainer() {
 		DefaultMessageListenerContainer container = createContainer(createSuccessfulConnectionFactory());
 		container.setCacheLevel(DefaultMessageListenerContainer.CACHE_CONNECTION);
 		container.setBackOff(new FixedBackOff(100, 1));
@@ -146,7 +181,7 @@ public class DefaultMessageListenerContainerTests {
 		return container;
 	}
 
-	private ConnectionFactory createSuccessfulConnectionFactory() {
+	private static ConnectionFactory createSuccessfulConnectionFactory() {
 		try {
 			ConnectionFactory connectionFactory = mock();
 			given(connectionFactory.createConnection()).willReturn(mock());
@@ -157,7 +192,7 @@ public class DefaultMessageListenerContainerTests {
 		}
 	}
 
-	private DefaultMessageListenerContainer createContainer(ConnectionFactory connectionFactory) {
+	private static DefaultMessageListenerContainer createContainer(ConnectionFactory connectionFactory) {
 		Destination destination = new Destination() {};
 
 		DefaultMessageListenerContainer container = new DefaultMessageListenerContainer();
@@ -167,7 +202,7 @@ public class DefaultMessageListenerContainerTests {
 		return container;
 	}
 
-	private ConnectionFactory createFailingContainerFactory() {
+	private static ConnectionFactory createFailingContainerFactory() {
 		try {
 			ConnectionFactory connectionFactory = mock();
 			given(connectionFactory.createConnection()).will(invocation -> {
@@ -180,7 +215,7 @@ public class DefaultMessageListenerContainerTests {
 		}
 	}
 
-	private ConnectionFactory createRecoverableContainerFactory(final int failingAttempts) {
+	private static ConnectionFactory createRecoverableContainerFactory(final int failingAttempts) {
 		try {
 			ConnectionFactory connectionFactory = mock();
 			given(connectionFactory.createConnection()).will(new Answer<Object>() {
@@ -213,7 +248,7 @@ public class DefaultMessageListenerContainerTests {
 			this.countDownLatch.countDown();
 		}
 
-		public void waitForCompletion() throws InterruptedException {
+		void waitForCompletion() throws InterruptedException {
 			this.countDownLatch.await(1, TimeUnit.SECONDS);
 			assertThat(this.countDownLatch.getCount()).as("callback was not invoked").isEqualTo(0);
 		}

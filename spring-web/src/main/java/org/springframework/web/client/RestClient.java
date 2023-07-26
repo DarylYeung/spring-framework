@@ -130,7 +130,7 @@ public interface RestClient {
 	Builder mutate();
 
 
-	// Static, factory methods
+	// Static factory methods
 
 	/**
 	 * Create a new {@code RestClient}.
@@ -208,7 +208,6 @@ public interface RestClient {
 
 		/**
 		 * Configure a base URL for requests. Effectively a shortcut for:
-		 * <p>
 		 * <pre class="code">
 		 * String baseUrl = "https://abc.go.com/v1";
 		 * DefaultUriBuilderFactory factory = new DefaultUriBuilderFactory(baseUrl);
@@ -229,7 +228,6 @@ public interface RestClient {
 		/**
 		 * Configure default URL variable values to use when expanding URI
 		 * templates with a {@link Map}. Effectively a shortcut for:
-		 * <p>
 		 * <pre class="code">
 		 * Map&lt;String, ?&gt; defaultVars = ...;
 		 * DefaultUriBuilderFactory factory = new DefaultUriBuilderFactory();
@@ -346,6 +344,14 @@ public interface RestClient {
 		 * Configure the {@link ClientHttpRequestFactory} to use. This is useful
 		 * for plugging in and/or customizing options of the underlying HTTP
 		 * client library (e.g. SSL).
+		 * <p>If no request factory is specified, {@code RestClient} uses
+		 * {@linkplain org.springframework.http.client.HttpComponentsClientHttpRequestFactory Apache Http Client},
+		 * {@linkplain org.springframework.http.client.JettyClientHttpRequestFactory Jetty Http Client}
+		 * if available on the classpath, and defaults to the
+		 * {@linkplain org.springframework.http.client.JdkClientHttpRequestFactory JDK HttpClient}
+		 * if the {@code java.net.http} module is loaded, or to a
+		 * {@linkplain org.springframework.http.client.SimpleClientHttpRequestFactory simple default}
+		 * otherwise.
 		 * @param requestFactory the request factory to use
 		 * @return this builder
 		 */
@@ -501,7 +507,7 @@ public interface RestClient {
 		/**
 		 * Proceed to declare how to extract the response. For example to extract
 		 * a {@link ResponseEntity} with status, headers, and body:
-		 * <p><pre>
+		 * <pre class="code">
 		 * ResponseEntity&lt;Person&gt; entity = client.get()
 		 *     .uri("/persons/1")
 		 *     .accept(MediaType.APPLICATION_JSON)
@@ -509,7 +515,7 @@ public interface RestClient {
 		 *     .toEntity(Person.class);
 		 * </pre>
 		 * <p>Or if interested only in the body:
-		 * <p><pre>
+		 * <pre class="code">
 		 * Person person = client.get()
 		 *     .uri("/persons/1")
 		 *     .accept(MediaType.APPLICATION_JSON)
@@ -528,7 +534,7 @@ public interface RestClient {
 		 * Exchange the {@link ClientHttpResponse} for a type {@code T}. This
 		 * can be useful for advanced scenarios, for example to decode the
 		 * response differently depending on the response status:
-		 * <p><pre>
+		 * <pre class="code">
 		 * Person person = client.get()
 		 *     .uri("/people/1")
 		 *     .accept(MediaType.APPLICATION_JSON)
@@ -548,7 +554,38 @@ public interface RestClient {
 		 * @param <T> the type the response will be transformed to
 		 * @return the value returned from the exchange function
 		 */
-		<T> T exchange(ExchangeFunction<T> exchangeFunction);
+		default <T> T exchange(ExchangeFunction<T> exchangeFunction) {
+			return exchange(exchangeFunction, true);
+		}
+
+		/**
+		 * Exchange the {@link ClientHttpResponse} for a type {@code T}. This
+		 * can be useful for advanced scenarios, for example to decode the
+		 * response differently depending on the response status:
+		 * <pre class="code">
+		 * Person person = client.get()
+		 *     .uri("/people/1")
+		 *     .accept(MediaType.APPLICATION_JSON)
+		 *     .exchange((request, response) -&gt; {
+		 *         if (response.getStatusCode().equals(HttpStatus.OK)) {
+		 *             return deserialize(response.getBody());
+		 *         }
+		 *         else {
+		 *             throw new BusinessException();
+		 *         }
+		 *     });
+		 * </pre>
+		 * <p><strong>Note:</strong> If {@code close} is {@code true},
+		 * then the response is {@linkplain ClientHttpResponse#close() closed}
+		 * after the exchange function has been invoked. When set to
+		 * {@code false}, the caller is responsible for closing the response.
+		 * @param exchangeFunction the function to handle the response with
+		 * @param close {@code true} to close the response after
+		 * {@code exchangeFunction} is invoked, {@code false} to keep it open
+		 * @param <T> the type the response will be transformed to
+		 * @return the value returned from the exchange function
+		 */
+		<T> T exchange(ExchangeFunction<T> exchangeFunction, boolean close);
 
 
 		/**
@@ -566,12 +603,8 @@ public interface RestClient {
 			 * @throws IOException in case of I/O errors
 			 */
 			T exchange(HttpRequest clientRequest, ClientHttpResponse clientResponse) throws IOException;
-
 		}
-
 	}
-
-
 
 
 	/**
@@ -600,7 +633,7 @@ public interface RestClient {
 		/**
 		 * Set the body of the request to the given {@code Object}.
 		 * For example:
-		 * <p><pre class="code">
+		 * <pre class="code">
 		 * Person person = ... ;
 		 * ResponseEntity&lt;Void&gt; response = client.post()
 		 *     .uri("/persons/{id}", id)
@@ -615,8 +648,8 @@ public interface RestClient {
 		RequestBodySpec body(Object body);
 
 		/**
-		 * Set the body of the response to the given {@code Object}. The parameter
-		 * {@code bodyType} is used to capture the generic type.
+		 * Set the body of the response to the given {@code Object}.
+		 * The parameter {@code bodyType} is used to capture the generic type.
 		 * @param body the body of the response
 		 * @param bodyType the type of the body, used to capture the generic type
 		 * @return the built response
@@ -627,11 +660,10 @@ public interface RestClient {
 		 * Set the body of the response to the given function that writes to
 		 * an {@link OutputStream}.
 		 * @param body a function that takes an {@code OutputStream} and can
-		 *             throw an {@code IOException}
+		 * throw an {@code IOException}
 		 * @return the built response
 		 */
 		RequestBodySpec body(StreamingHttpOutputMessage.Body body);
-
 	}
 
 
@@ -641,11 +673,9 @@ public interface RestClient {
 	interface ResponseSpec {
 
 		/**
-		 * Provide a function to map specific error status codes to an error
-		 * handler.
-		 * <p>By default, if there are no matching status handlers, responses
-		 * with status codes &gt;= 400 wil throw a
-		 * {@link RestClientResponseException}.
+		 * Provide a function to map specific error status codes to an error handler.
+		 * <p>By default, if there are no matching status handlers, responses with
+		 * status codes &gt;= 400 wil throw a {@link RestClientResponseException}.
 		 * @param statusPredicate to match responses with
 		 * @param errorHandler handler that typically, though not necessarily,
 		 * throws an exception
@@ -655,11 +685,9 @@ public interface RestClient {
 				ErrorHandler errorHandler);
 
 		/**
-		 * Provide a function to map specific error status codes to an error
-		 * handler.
-		 * <p>By default, if there are no matching status handlers, responses
-		 * with status codes &gt;= 400 wil throw a
-		 * {@link RestClientResponseException}.
+		 * Provide a function to map specific error status codes to an error handler.
+		 * <p>By default, if there are no matching status handlers, responses with
+		 * status codes &gt;= 400 wil throw a {@link RestClientResponseException}.
 		 * @param errorHandler the error handler
 		 * @return this builder
 		 */
@@ -740,9 +768,7 @@ public interface RestClient {
 			 * @throws IOException in case of I/O errors
 			 */
 			void handle(HttpRequest request, ClientHttpResponse response) throws IOException;
-
 		}
-
 	}
 
 

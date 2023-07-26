@@ -38,15 +38,16 @@ import org.springframework.core.KotlinDetector;
 import org.springframework.core.ReactiveAdapter;
 import org.springframework.core.ReactiveAdapterRegistry;
 import org.springframework.lang.Nullable;
-import org.springframework.scheduling.config.DefaultScheduledTaskObservationConvention;
-import org.springframework.scheduling.config.ScheduledTaskObservationContext;
-import org.springframework.scheduling.config.ScheduledTaskObservationConvention;
+import org.springframework.scheduling.SchedulingAwareRunnable;
+import org.springframework.scheduling.support.DefaultScheduledTaskObservationConvention;
+import org.springframework.scheduling.support.ScheduledTaskObservationContext;
+import org.springframework.scheduling.support.ScheduledTaskObservationConvention;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
-import static org.springframework.scheduling.config.ScheduledTaskObservationDocumentation.TASKS_SCHEDULED_EXECUTION;
+import static org.springframework.scheduling.support.ScheduledTaskObservationDocumentation.TASKS_SCHEDULED_EXECUTION;
 
 /**
  * Helper class for @{@link ScheduledAnnotationBeanPostProcessor} to support reactive
@@ -120,8 +121,10 @@ abstract class ScheduledAnnotationReactiveSupport {
 
 		boolean shouldBlock = (scheduled.fixedDelay() > 0 || StringUtils.hasText(scheduled.fixedDelayString()));
 		Publisher<?> publisher = getPublisherFor(method, targetBean);
-		Supplier<ScheduledTaskObservationContext> contextSupplier = () -> new ScheduledTaskObservationContext(targetBean, method);
-		return new SubscribingRunnable(publisher, shouldBlock, subscriptionTrackerRegistry, observationRegistrySupplier, contextSupplier);
+		Supplier<ScheduledTaskObservationContext> contextSupplier =
+				() -> new ScheduledTaskObservationContext(targetBean, method);
+		return new SubscribingRunnable(publisher, shouldBlock, scheduled.scheduler(),
+				subscriptionTrackerRegistry, observationRegistrySupplier, contextSupplier);
 	}
 
 	/**
@@ -180,13 +183,17 @@ abstract class ScheduledAnnotationReactiveSupport {
 	 * Utility implementation of {@code Runnable} that subscribes to a {@code Publisher}
 	 * or subscribes-then-blocks if {@code shouldBlock} is set to {@code true}.
 	 */
-	static final class SubscribingRunnable implements Runnable {
+	static final class SubscribingRunnable implements SchedulingAwareRunnable {
+
+		private static final ScheduledTaskObservationConvention DEFAULT_CONVENTION =
+				new DefaultScheduledTaskObservationConvention();
 
 		private final Publisher<?> publisher;
 
-		private static final ScheduledTaskObservationConvention DEFAULT_CONVENTION = new DefaultScheduledTaskObservationConvention();
-
 		final boolean shouldBlock;
+
+		@Nullable
+		private final String qualifier;
 
 		private final List<Runnable> subscriptionTrackerRegistry;
 
@@ -194,14 +201,23 @@ abstract class ScheduledAnnotationReactiveSupport {
 
 		final Supplier<ScheduledTaskObservationContext> contextSupplier;
 
-		SubscribingRunnable(Publisher<?> publisher, boolean shouldBlock, List<Runnable> subscriptionTrackerRegistry,
-				Supplier<ObservationRegistry> observationRegistrySupplier, Supplier<ScheduledTaskObservationContext> contextSupplier) {
+		SubscribingRunnable(Publisher<?> publisher, boolean shouldBlock,
+				@Nullable String qualifier, List<Runnable> subscriptionTrackerRegistry,
+				Supplier<ObservationRegistry> observationRegistrySupplier,
+				Supplier<ScheduledTaskObservationContext> contextSupplier) {
 
 			this.publisher = publisher;
 			this.shouldBlock = shouldBlock;
+			this.qualifier = qualifier;
 			this.subscriptionTrackerRegistry = subscriptionTrackerRegistry;
 			this.observationRegistrySupplier = observationRegistrySupplier;
 			this.contextSupplier = contextSupplier;
+		}
+
+		@Override
+		@Nullable
+		public String getQualifier() {
+			return this.qualifier;
 		}
 
 		@Override

@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.aot.hint.ExecutableMode;
 import org.springframework.beans.BeanInstantiationException;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.TypeConverter;
 import org.springframework.beans.factory.BeanFactory;
@@ -172,7 +173,9 @@ public final class BeanInstanceSupplier<T> extends AutowiredElementResolver impl
 	 * {@code generator} supplier to instantiate the underlying bean.
 	 * @param generator a {@link ThrowingSupplier} to instantiate the underlying bean
 	 * @return a new {@link BeanInstanceSupplier} instance with the specified generator
+	 * @deprecated in favor of {@link #withGenerator(ThrowingFunction)}
 	 */
+	@Deprecated(since = "6.0.11", forRemoval = true)
 	public BeanInstanceSupplier<T> withGenerator(ThrowingSupplier<T> generator) {
 		Assert.notNull(generator, "'generator' must not be null");
 		return new BeanInstanceSupplier<>(this.lookup,
@@ -246,18 +249,18 @@ public final class BeanInstanceSupplier<T> extends AutowiredElementResolver impl
 				() -> "'shortcuts' must contain " + resolved.length + " elements");
 
 		ConstructorArgumentValues argumentValues = resolveArgumentValues(registeredBean);
-		Set<String> autowiredBeans = new LinkedHashSet<>(resolved.length);
+		Set<String> autowiredBeanNames = new LinkedHashSet<>(resolved.length * 2);
 		for (int i = startIndex; i < parameterCount; i++) {
 			MethodParameter parameter = getMethodParameter(executable, i);
 			DependencyDescriptor descriptor = new DependencyDescriptor(parameter, true);
 			String shortcut = (this.shortcuts != null ? this.shortcuts[i - startIndex] : null);
 			if (shortcut != null) {
-				descriptor = new ShortcutDependencyDescriptor(descriptor, shortcut, registeredBean.getBeanClass());
+				descriptor = new ShortcutDependencyDescriptor(descriptor, shortcut);
 			}
 			ValueHolder argumentValue = argumentValues.getIndexedArgumentValue(i, null);
-			resolved[i - startIndex] = resolveArgument(registeredBean, descriptor, argumentValue, autowiredBeans);
+			resolved[i - startIndex] = resolveArgument(registeredBean, descriptor, argumentValue, autowiredBeanNames);
 		}
-		registerDependentBeans(registeredBean.getBeanFactory(), registeredBean.getBeanName(), autowiredBeans);
+		registerDependentBeans(registeredBean.getBeanFactory(), registeredBean.getBeanName(), autowiredBeanNames);
 
 		return AutowiredArguments.of(resolved);
 	}
@@ -300,7 +303,7 @@ public final class BeanInstanceSupplier<T> extends AutowiredElementResolver impl
 
 	@Nullable
 	private Object resolveArgument(RegisteredBean registeredBean, DependencyDescriptor descriptor,
-			@Nullable ValueHolder argumentValue, Set<String> autowiredBeans) {
+			@Nullable ValueHolder argumentValue, Set<String> autowiredBeanNames) {
 
 		TypeConverter typeConverter = registeredBean.getBeanFactory().getTypeConverter();
 		if (argumentValue != null) {
@@ -309,7 +312,7 @@ public final class BeanInstanceSupplier<T> extends AutowiredElementResolver impl
 							descriptor.getDependencyType(), descriptor.getMethodParameter()));
 		}
 		try {
-			return registeredBean.resolveAutowiredArgument(descriptor, typeConverter, autowiredBeans);
+			return registeredBean.resolveAutowiredArgument(descriptor, typeConverter, autowiredBeanNames);
 		}
 		catch (BeansException ex) {
 			throw new UnsatisfiedDependencyException(null, registeredBean.getBeanName(), descriptor, ex);
@@ -343,8 +346,7 @@ public final class BeanInstanceSupplier<T> extends AutowiredElementResolver impl
 			Object enclosingInstance = createInstance(declaringClass.getEnclosingClass());
 			args = ObjectUtils.addObjectToArray(args, enclosingInstance, 0);
 		}
-		ReflectionUtils.makeAccessible(constructor);
-		return constructor.newInstance(args);
+		return BeanUtils.instantiateClass(constructor, args);
 	}
 
 	private Object instantiate(ConfigurableBeanFactory beanFactory, Method method, Object[] args) throws Exception {

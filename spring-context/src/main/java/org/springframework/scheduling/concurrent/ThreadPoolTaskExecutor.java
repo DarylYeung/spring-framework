@@ -254,27 +254,29 @@ public class ThreadPoolTaskExecutor extends ExecutorConfigurationSupport
 
 		BlockingQueue<Runnable> queue = createQueue(this.queueCapacity);
 
-		ThreadPoolExecutor executor;
-		if (this.taskDecorator != null) {
-			executor = new ThreadPoolExecutor(
+		ThreadPoolExecutor executor = new ThreadPoolExecutor(
 					this.corePoolSize, this.maxPoolSize, this.keepAliveSeconds, TimeUnit.SECONDS,
 					queue, threadFactory, rejectedExecutionHandler) {
-				@Override
-				public void execute(Runnable command) {
-					Runnable decorated = taskDecorator.decorate(command);
+			@Override
+			public void execute(Runnable command) {
+				Runnable decorated = command;
+				if (taskDecorator != null) {
+					decorated = taskDecorator.decorate(command);
 					if (decorated != command) {
 						decoratedTaskMap.put(decorated, command);
 					}
-					super.execute(decorated);
 				}
-			};
-		}
-		else {
-			executor = new ThreadPoolExecutor(
-					this.corePoolSize, this.maxPoolSize, this.keepAliveSeconds, TimeUnit.SECONDS,
-					queue, threadFactory, rejectedExecutionHandler);
-
-		}
+				super.execute(decorated);
+			}
+			@Override
+			protected void beforeExecute(Thread thread, Runnable task) {
+				ThreadPoolTaskExecutor.this.beforeExecute(thread, task);
+			}
+			@Override
+			protected void afterExecute(Runnable task, Throwable ex) {
+				ThreadPoolTaskExecutor.this.afterExecute(task, ex);
+			}
+		};
 
 		if (this.allowCoreThreadTimeOut) {
 			executor.allowCoreThreadTimeOut(true);
@@ -360,7 +362,7 @@ public class ThreadPoolTaskExecutor extends ExecutorConfigurationSupport
 			executor.execute(task);
 		}
 		catch (RejectedExecutionException ex) {
-			throw new TaskRejectedException("Executor [" + executor + "] did not accept task: " + task, ex);
+			throw new TaskRejectedException(executor, task, ex);
 		}
 	}
 
@@ -371,7 +373,7 @@ public class ThreadPoolTaskExecutor extends ExecutorConfigurationSupport
 			return executor.submit(task);
 		}
 		catch (RejectedExecutionException ex) {
-			throw new TaskRejectedException("Executor [" + executor + "] did not accept task: " + task, ex);
+			throw new TaskRejectedException(executor, task, ex);
 		}
 	}
 
@@ -382,7 +384,7 @@ public class ThreadPoolTaskExecutor extends ExecutorConfigurationSupport
 			return executor.submit(task);
 		}
 		catch (RejectedExecutionException ex) {
-			throw new TaskRejectedException("Executor [" + executor + "] did not accept task: " + task, ex);
+			throw new TaskRejectedException(executor, task, ex);
 		}
 	}
 
@@ -395,7 +397,7 @@ public class ThreadPoolTaskExecutor extends ExecutorConfigurationSupport
 			return future;
 		}
 		catch (RejectedExecutionException ex) {
-			throw new TaskRejectedException("Executor [" + executor + "] did not accept task: " + task, ex);
+			throw new TaskRejectedException(executor, task, ex);
 		}
 	}
 
@@ -408,7 +410,7 @@ public class ThreadPoolTaskExecutor extends ExecutorConfigurationSupport
 			return future;
 		}
 		catch (RejectedExecutionException ex) {
-			throw new TaskRejectedException("Executor [" + executor + "] did not accept task: " + task, ex);
+			throw new TaskRejectedException(executor, task, ex);
 		}
 	}
 

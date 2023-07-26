@@ -169,7 +169,7 @@ public class RequestMappingHandlerAdapter extends AbstractHandlerMethodAdapter
 	@Nullable
 	private MethodValidator methodValidator;
 
-	private AsyncTaskExecutor taskExecutor = new SimpleAsyncTaskExecutor("MvcAsync");
+	private AsyncTaskExecutor taskExecutor = new MvcSimpleAsyncTaskExecutor();
 
 	@Nullable
 	private Long asyncRequestTimeout;
@@ -399,9 +399,9 @@ public class RequestMappingHandlerAdapter extends AbstractHandlerMethodAdapter
 	 * Set the default {@link AsyncTaskExecutor} to use when a controller method
 	 * return a {@link Callable}. Controller methods can override this default on
 	 * a per-request basis by returning an {@link WebAsyncTask}.
-	 * <p>By default a {@link SimpleAsyncTaskExecutor} instance is used.
-	 * It's recommended to change that default in production as the simple executor
-	 * does not re-use threads.
+	 * <p>If your application has controllers with such return types, please
+	 * configure an {@link AsyncTaskExecutor} as the one used by default is not
+	 * suitable for production under load.
 	 */
 	public void setTaskExecutor(AsyncTaskExecutor taskExecutor) {
 		this.taskExecutor = taskExecutor;
@@ -1039,6 +1039,39 @@ public class RequestMappingHandlerAdapter extends AbstractHandlerMethodAdapter
 			}
 		}
 		return mav;
+	}
+
+
+	/**
+	 * A default Spring MVC AsyncTaskExecutor that warns if used.
+	 */
+	@SuppressWarnings("serial")
+	private class MvcSimpleAsyncTaskExecutor extends SimpleAsyncTaskExecutor {
+
+		private static boolean taskExecutorWarning = true;
+
+		public MvcSimpleAsyncTaskExecutor() {
+			super("MvcAsync");
+		}
+
+		@Override
+		public void execute(Runnable task) {
+			if (taskExecutorWarning && logger.isWarnEnabled()) {
+				synchronized (this) {
+					if (taskExecutorWarning) {
+						logger.warn("""
+								!!!
+								Performing asynchronous handling through the default Spring MVC SimpleAsyncTaskExecutor.
+								This executor is not suitable for production use under load.
+								Please, configure an AsyncTaskExecutor through the WebMvc config.
+								-------------------------------
+								!!!""");
+						taskExecutorWarning = false;
+					}
+				}
+			}
+			super.execute(task);
+		}
 	}
 
 }

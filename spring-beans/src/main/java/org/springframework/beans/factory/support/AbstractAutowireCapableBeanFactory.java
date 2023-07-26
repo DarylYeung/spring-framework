@@ -1484,8 +1484,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			converter = bw;
 		}
 
-		Set<String> autowiredBeanNames = new LinkedHashSet<>(4);
 		String[] propertyNames = unsatisfiedNonSimpleProperties(mbd, bw);
+		Set<String> autowiredBeanNames = new LinkedHashSet<>(propertyNames.length * 2);
 		for (String propertyName : propertyNames) {
 			try {
 				PropertyDescriptor pd = bw.getPropertyDescriptor(propertyName);
@@ -1942,6 +1942,10 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		@Override
 		@Nullable
 		public Constructor<?>[] getPreferredConstructors() {
+			Constructor<?>[] fromAttribute = super.getPreferredConstructors();
+			if (fromAttribute != null) {
+				return fromAttribute;
+			}
 			return ConstructorResolver.determinePreferredConstructors(getBeanClass());
 		}
 

@@ -979,7 +979,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		for (String beanName : beanNames) {
 			Object singletonInstance = getSingleton(beanName);
 			if (singletonInstance instanceof SmartInitializingSingleton smartSingleton) {
-				StartupStep smartInitialize = this.getApplicationStartup().start("spring.beans.smart-initialize")
+				StartupStep smartInitialize = getApplicationStartup().start("spring.beans.smart-initialize")
 						.tag("beanName", beanName);
 				smartSingleton.afterSingletonsInstantiated();
 				smartInitialize.end();
@@ -2137,7 +2137,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			return resolveStream(true);
 		}
 
-		@SuppressWarnings({ "unchecked", "rawtypes" })
+		@SuppressWarnings({"rawtypes", "unchecked"})
 		private Stream<Object> resolveStream(boolean ordered) {
 			DependencyDescriptor descriptorToUse = new StreamDependencyDescriptor(this.descriptor, ordered);
 			Object result = doResolveDependency(descriptorToUse, this.beanName, null, null);

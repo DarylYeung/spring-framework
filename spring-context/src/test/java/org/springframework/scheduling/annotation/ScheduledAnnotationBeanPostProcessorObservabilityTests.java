@@ -36,8 +36,7 @@ import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
-import org.springframework.scheduling.config.ScheduledTaskObservationContext;
-import org.springframework.scheduling.config.ScheduledTaskRegistrar;
+import org.springframework.scheduling.support.ScheduledTaskObservationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,10 +54,12 @@ class ScheduledAnnotationBeanPostProcessorObservabilityTests {
 
 	private final TestObservationRegistry observationRegistry = TestObservationRegistry.create();
 
+
 	@AfterEach
 	void closeContext() {
 		context.close();
 	}
+
 
 	@Test
 	void shouldRecordSuccessObservationsForTasks() throws Exception {
@@ -153,14 +154,7 @@ class ScheduledAnnotationBeanPostProcessorObservabilityTests {
 		targetDefinition.getPropertyValues().add("observationRegistry", this.observationRegistry);
 		context.registerBeanDefinition("postProcessor", processorDefinition);
 		context.registerBeanDefinition("target", targetDefinition);
-		context.registerBean("schedulingConfigurer", SchedulingConfigurer.class, () -> {
-			return new SchedulingConfigurer() {
-				@Override
-				public void configureTasks(ScheduledTaskRegistrar taskRegistrar) {
-					taskRegistrar.setObservationRegistry(observationRegistry);
-				}
-			};
-		});
+		context.registerBean("schedulingConfigurer", SchedulingConfigurer.class, () -> taskRegistrar -> taskRegistrar.setObservationRegistry(observationRegistry));
 		context.refresh();
 	}
 
@@ -185,6 +179,7 @@ class ScheduledAnnotationBeanPostProcessorObservabilityTests {
 				.hasObservationWithNameEqualTo("tasks.scheduled.execution").that();
 	}
 
+
 	static abstract class TaskTester {
 
 		ObservationRegistry observationRegistry;
@@ -195,54 +190,54 @@ class ScheduledAnnotationBeanPostProcessorObservabilityTests {
 			this.observationRegistry = observationRegistry;
 		}
 
-		public void await() throws InterruptedException {
+		void await() throws InterruptedException {
 			this.latch.await(3, TimeUnit.SECONDS);
 		}
 	}
 
+
 	static class FixedDelayBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public void fixedDelay() {
+		void fixedDelay() {
 			this.latch.countDown();
 		}
-
 	}
 
 
 	static class FixedDelayErrorBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public void error() {
+		void error() {
 			this.latch.countDown();
 			throw new IllegalStateException("test error");
 		}
-
 	}
+
 
 	static class FixedDelayReactiveBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public Mono<Object> fixedDelay() {
+		Mono<Object> fixedDelay() {
 			return Mono.empty().doOnTerminate(() -> this.latch.countDown());
 		}
-
 	}
+
 
 	static class FixedDelayReactiveErrorBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public Mono<Object> error() {
+		Mono<Object> error() {
 			return Mono.error(new IllegalStateException("test error"))
 					.doOnTerminate(() -> this.latch.countDown());
 		}
-
 	}
+
 
 	static class CancelledTaskBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public void cancelled() {
+		void cancelled() {
 			this.latch.countDown();
 			try {
 				Thread.sleep(5000);
@@ -251,34 +246,35 @@ class ScheduledAnnotationBeanPostProcessorObservabilityTests {
 				// ignore cancelled task
 			}
 		}
-
 	}
+
 
 	static class CancelledReactiveTaskBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public Flux<Long> cancelled() {
+		Flux<Long> cancelled() {
 			return Flux.interval(Duration.ZERO, Duration.ofSeconds(1))
 					.doOnNext(el -> this.latch.countDown());
 		}
-
 	}
+
 
 	static class CurrentObservationBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public void hasCurrentObservation() {
-			assertThat(this.observationRegistry.getCurrentObservation()).isNotNull();
-			assertThat(this.observationRegistry.getCurrentObservation().getContext()).isInstanceOf(ScheduledTaskObservationContext.class);
+		void hasCurrentObservation() {
+			Observation observation = this.observationRegistry.getCurrentObservation();
+			assertThat(observation).isNotNull();
+			assertThat(observation.getContext()).isInstanceOf(ScheduledTaskObservationContext.class);
 			this.latch.countDown();
 		}
-
 	}
+
 
 	static class CurrentObservationReactiveBean extends TaskTester {
 
 		@Scheduled(fixedDelay = 10_000, initialDelay = 5_000)
-		public Mono<String> hasCurrentObservation() {
+		Mono<String> hasCurrentObservation() {
 			return Mono.just("test")
 					.tap(() -> new DefaultSignalListener<String>() {
 						@Override
@@ -290,7 +286,6 @@ class ScheduledAnnotationBeanPostProcessorObservabilityTests {
 					})
 					.doOnTerminate(() -> this.latch.countDown());
 		}
-
 	}
 
 }

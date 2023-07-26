@@ -30,6 +30,8 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpRequestInitializer;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.client.JettyClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -57,7 +59,15 @@ import org.springframework.web.util.UriBuilderFactory;
  */
 final class DefaultRestClientBuilder implements RestClient.Builder {
 
+	// request factories
+
 	private static final boolean httpComponentsClientPresent;
+
+	private static final boolean jettyClientPresent;
+
+	private static final boolean jdkClientPresent;
+
+	// message factories
 
 	private static final boolean jackson2Present;
 
@@ -74,7 +84,11 @@ final class DefaultRestClientBuilder implements RestClient.Builder {
 
 	static {
 		ClassLoader loader = DefaultRestClientBuilder.class.getClassLoader();
+
 		httpComponentsClientPresent = ClassUtils.isPresent("org.apache.hc.client5.http.classic.HttpClient", loader);
+		jettyClientPresent = ClassUtils.isPresent("org.eclipse.jetty.client.HttpClient", loader);
+		jdkClientPresent = ClassUtils.isPresent("java.net.http.HttpClient", loader);
+
 		jackson2Present = ClassUtils.isPresent("com.fasterxml.jackson.databind.ObjectMapper", loader) &&
 				ClassUtils.isPresent("com.fasterxml.jackson.core.JsonGenerator", loader);
 		gsonPresent = ClassUtils.isPresent("com.google.gson.Gson", loader);
@@ -344,6 +358,13 @@ final class DefaultRestClientBuilder implements RestClient.Builder {
 		}
 		else if (httpComponentsClientPresent) {
 			return new HttpComponentsClientHttpRequestFactory();
+		}
+		else if (jettyClientPresent) {
+			return new JettyClientHttpRequestFactory();
+		}
+		else if (jdkClientPresent) {
+			// java.net.http module might not be loaded, so we can't default to the JDK HttpClient
+			return new JdkClientHttpRequestFactory();
 		}
 		else {
 			return new SimpleClientHttpRequestFactory();

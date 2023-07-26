@@ -126,6 +126,20 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 	public static final int DEPENDENCY_CHECK_ALL = 3;
 
 	/**
+	 * The name of an attribute that can be
+	 * {@link org.springframework.core.AttributeAccessor#setAttribute set} on a
+	 * {@link org.springframework.beans.factory.config.BeanDefinition} so that
+	 * bean definitions can indicate one or more preferred constructors. This is
+	 * analogous to {@code @Autowired} annotated constructors on the bean class.
+	 * <p>The attribute value may be a single {@link java.lang.reflect.Constructor}
+	 * reference or an array thereof.
+	 * @since 6.1
+	 * @see org.springframework.beans.factory.annotation.Autowired
+	 * @see org.springframework.beans.factory.support.RootBeanDefinition#getPreferredConstructors()
+	 */
+	public static final String PREFERRED_CONSTRUCTORS_ATTRIBUTE = "preferredConstructors";
+
+	/**
 	 * Constant that indicates the container should attempt to infer the
 	 * {@link #setDestroyMethodName destroy method name} for a bean as opposed to
 	 * explicit specification of a method name. The value {@value} is specifically
@@ -1211,13 +1225,8 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 
 	@Override
 	public boolean equals(@Nullable Object other) {
-		if (this == other) {
-			return true;
-		}
-		if (!(other instanceof AbstractBeanDefinition that)) {
-			return false;
-		}
-		return (ObjectUtils.nullSafeEquals(getBeanClassName(), that.getBeanClassName()) &&
+		return (this == other || (other instanceof AbstractBeanDefinition that &&
+				ObjectUtils.nullSafeEquals(getBeanClassName(), that.getBeanClassName()) &&
 				ObjectUtils.nullSafeEquals(this.scope, that.scope) &&
 				this.abstractFlag == that.abstractFlag &&
 				this.lazyInit == that.lazyInit &&
@@ -1240,7 +1249,7 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 				this.enforceDestroyMethod == that.enforceDestroyMethod &&
 				this.synthetic == that.synthetic &&
 				this.role == that.role &&
-				super.equals(other));
+				super.equals(other)));
 	}
 
 	private boolean equalsConstructorArgumentValues(AbstractBeanDefinition other) {
