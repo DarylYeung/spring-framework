@@ -207,6 +207,7 @@ public class GenericWebApplicationContext extends GenericApplicationContext
 	 */
 	@Override
 	protected void initPropertySources() {
+		//	SpringBoot启动的web环境下，返回的是StandardServletEnvironment
 		ConfigurableEnvironment env = getEnvironment();
 		if (env instanceof ConfigurableWebEnvironment configurableWebEnv) {
 			configurableWebEnv.initPropertySources(this.servletContext, null);
