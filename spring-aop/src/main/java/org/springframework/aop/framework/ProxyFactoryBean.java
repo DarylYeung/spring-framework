@@ -248,6 +248,7 @@ public class ProxyFactoryBean extends ProxyCreatorSupport
 	@Override
 	@Nullable
 	public Object getObject() throws BeansException {
+		//	通过获取该FactoryBean的interceptors名称来创建并注册整个Advisor
 		initializeAdvisorChain();
 		if (isSingleton()) {
 			return getSingletonInstance();

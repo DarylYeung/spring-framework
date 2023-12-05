@@ -341,17 +341,20 @@ public class SpringFactoriesLoader {
 				UrlResource resource = new UrlResource(urls.nextElement());
 				Properties properties = PropertiesLoaderUtils.loadProperties(resource);
 				properties.forEach((name, value) -> {
+					//	1. 逗号分隔的字符串
 					String[] factoryImplementationNames = StringUtils.commaDelimitedListToStringArray((String) value);
 					List<String> implementations = result.computeIfAbsent(((String) name).trim(),
 							key -> new ArrayList<>(factoryImplementationNames.length));
 					Arrays.stream(factoryImplementationNames).map(String::trim).forEach(implementations::add);
 				});
 			}
+			//	去重
 			result.replaceAll(SpringFactoriesLoader::toDistinctUnmodifiableList);
 		}
 		catch (IOException ex) {
 			throw new IllegalArgumentException("Unable to load factories from location [" + resourceLocation + "]", ex);
 		}
+		//	返回一个不可修改的map,防止被修改
 		return Collections.unmodifiableMap(result);
 	}
 
