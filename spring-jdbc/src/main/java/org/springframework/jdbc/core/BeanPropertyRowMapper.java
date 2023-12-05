@@ -61,7 +61,7 @@ import org.springframework.util.StringUtils;
  * long, Long, float, Float, double, Double, BigDecimal, {@code java.util.Date}, etc.
  *
  * <p>To facilitate mapping between columns and properties that don't have matching
- * names, try using column aliases in the SQL statement like
+ * names, try using underscore-separated column aliases in the SQL statement like
  * {@code "select fname as first_name from customer"}, where {@code first_name}
  * can be mapped to a {@code setFirstName(String)} method in the target class.
  *
@@ -87,6 +87,7 @@ import org.springframework.util.StringUtils;
  * @since 2.5
  * @param <T> the result type
  * @see DataClassRowMapper
+ * @see SimplePropertyRowMapper
  */
 public class BeanPropertyRowMapper<T> implements RowMapper<T> {
 
@@ -278,6 +279,7 @@ public class BeanPropertyRowMapper<T> implements RowMapper<T> {
 	 * @param name the original name
 	 * @return the converted name
 	 * @since 4.2
+	 * @see #underscoreName
 	 */
 	protected String lowerCaseName(String name) {
 		return name.toLowerCase(Locale.US);
@@ -289,25 +291,10 @@ public class BeanPropertyRowMapper<T> implements RowMapper<T> {
 	 * @param name the original name
 	 * @return the converted name
 	 * @since 4.2
-	 * @see #lowerCaseName
+	 * @see JdbcUtils#convertPropertyNameToUnderscoreName
 	 */
 	protected String underscoreName(String name) {
-		if (!StringUtils.hasLength(name)) {
-			return "";
-		}
-
-		StringBuilder result = new StringBuilder();
-		result.append(Character.toLowerCase(name.charAt(0)));
-		for (int i = 1; i < name.length(); i++) {
-			char c = name.charAt(i);
-			if (Character.isUpperCase(c)) {
-				result.append('_').append(Character.toLowerCase(c));
-			}
-			else {
-				result.append(c);
-			}
-		}
-		return result.toString();
+		return JdbcUtils.convertPropertyNameToUnderscoreName(name);
 	}
 
 
@@ -343,7 +330,7 @@ public class BeanPropertyRowMapper<T> implements RowMapper<T> {
 						bw.setPropertyValue(pd.getName(), value);
 					}
 					catch (TypeMismatchException ex) {
-						if (value == null && this.primitivesDefaultedForNullValue) {
+						if (value == null && isPrimitivesDefaultedForNullValue()) {
 							if (logger.isDebugEnabled()) {
 								String propertyType = ClassUtils.getQualifiedName(pd.getPropertyType());
 								logger.debug("""
@@ -383,7 +370,7 @@ public class BeanPropertyRowMapper<T> implements RowMapper<T> {
 	 * @throws SQLException if an SQLException is encountered
 	 * @since 5.3
 	 */
-	protected T constructMappedInstance(ResultSet rs, TypeConverter tc) throws SQLException  {
+	protected T constructMappedInstance(ResultSet rs, TypeConverter tc) throws SQLException {
 		Assert.state(this.mappedClass != null, "Mapped class was not specified");
 		return BeanUtils.instantiateClass(this.mappedClass);
 	}
@@ -406,8 +393,11 @@ public class BeanPropertyRowMapper<T> implements RowMapper<T> {
 
 	/**
 	 * Retrieve a JDBC object value for the specified column.
-	 * <p>The default implementation delegates to
-	 * {@link #getColumnValue(ResultSet, int, Class)}.
+	 * <p>The default implementation calls
+	 * {@link JdbcUtils#getResultSetValue(java.sql.ResultSet, int, Class)}
+	 * using the type of the specified {@link PropertyDescriptor}.
+	 * <p>Subclasses may override this to check specific value types upfront,
+	 * or to post-process values returned from {@code getResultSetValue}.
 	 * @param rs is the ResultSet holding the data
 	 * @param index is the column index
 	 * @param pd the bean property that each result object is expected to match
@@ -424,8 +414,8 @@ public class BeanPropertyRowMapper<T> implements RowMapper<T> {
 	 * Retrieve a JDBC object value for the specified column.
 	 * <p>The default implementation calls
 	 * {@link JdbcUtils#getResultSetValue(java.sql.ResultSet, int, Class)}.
-	 * Subclasses may override this to check specific value types upfront,
-	 * or to post-process values return from {@code getResultSetValue}.
+	 * <p>Subclasses may override this to check specific value types upfront,
+	 * or to post-process values returned from {@code getResultSetValue}.
 	 * @param rs is the ResultSet holding the data
 	 * @param index is the column index
 	 * @param paramType the target parameter type

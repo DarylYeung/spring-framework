@@ -27,6 +27,7 @@ import java.util.function.Supplier;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -37,12 +38,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
 import org.springframework.util.LinkedCaseInsensitiveMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.ForwardedHeaderUtils;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UrlPathHelper;
+import org.springframework.web.util.WebUtils;
 
 /**
  * Extract values from "Forwarded" and "X-Forwarded-*" headers, wrap the request
@@ -69,6 +72,7 @@ import org.springframework.web.util.UrlPathHelper;
  * @author Rob Winch
  * @since 4.3
  * @see <a href="https://tools.ietf.org/html/rfc7239">https://tools.ietf.org/html/rfc7239</a>
+ * @see <a href="https://docs.spring.io/spring-framework/reference/web/webmvc/filters.html#filters-forwarded-headers">Forwarded Headers</a>
  */
 public class ForwardedHeaderFilter extends OncePerRequestFilter {
 
@@ -164,6 +168,7 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 		doFilterInternal(request, response, filterChain);
 	}
 
+
 	/**
 	 * Hide "Forwarded" or "X-Forwarded-*" headers.
 	 */
@@ -234,7 +239,6 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 
 		private final ForwardedPrefixExtractor forwardedPrefixExtractor;
 
-
 		ForwardedHeaderExtractingRequest(HttpServletRequest servletRequest) {
 			super(servletRequest);
 
@@ -251,11 +255,12 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 
 			this.remoteAddress = ForwardedHeaderUtils.parseForwardedFor(uri, headers, request.getRemoteAddress());
 
-			String baseUrl = this.scheme + "://" + this.host + (port == -1 ? "" : ":" + port);
-			Supplier<HttpServletRequest> delegateRequest = () -> (HttpServletRequest) getRequest();
-			this.forwardedPrefixExtractor = new ForwardedPrefixExtractor(delegateRequest, baseUrl);
-		}
+			// Use Supplier as Tomcat updates delegate request on FORWARD
+			Supplier<HttpServletRequest> requestSupplier = () -> (HttpServletRequest) getRequest();
 
+			this.forwardedPrefixExtractor = new ForwardedPrefixExtractor(
+					requestSupplier, (this.scheme + "://" + this.host + (port == -1 ? "" : ":" + port)));
+		}
 
 		@Override
 		@Nullable
@@ -310,6 +315,15 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 		public int getRemotePort() {
 			return (this.remoteAddress != null ? this.remoteAddress.getPort() : super.getRemotePort());
 		}
+
+		@SuppressWarnings("DataFlowIssue")
+		@Override
+		public Object getAttribute(String name) {
+			if (name.equals(WebUtils.ERROR_REQUEST_URI_ATTRIBUTE)) {
+				return this.forwardedPrefixExtractor.getErrorRequestUri();
+			}
+			return super.getAttribute(name);
+		}
 	}
 
 
@@ -334,22 +348,22 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 
 		private String requestUrl;
 
-
 		/**
 		 * Constructor with required information.
-		 * @param delegateRequest supplier for the current
+		 * @param delegate supplier for the current
 		 * {@link HttpServletRequestWrapper#getRequest() delegate request} which
 		 * may change during a forward (e.g. Tomcat.
 		 * @param baseUrl the host, scheme, and port based on forwarded headers
 		 */
-		public ForwardedPrefixExtractor(Supplier<HttpServletRequest> delegateRequest, String baseUrl) {
-			this.delegate = delegateRequest;
+		public ForwardedPrefixExtractor(Supplier<HttpServletRequest> delegate, String baseUrl) {
+			this.delegate = delegate;
 			this.baseUrl = baseUrl;
-			this.actualRequestUri = delegateRequest.get().getRequestURI();
+			this.actualRequestUri = delegate.get().getRequestURI();
 
-			this.forwardedPrefix = initForwardedPrefix(delegateRequest.get());
+			// Keep call order
+			this.forwardedPrefix = initForwardedPrefix(delegate.get());
 			this.requestUri = initRequestUri();
-			this.requestUrl = initRequestUrl(); // Keep the order: depends on requestUri
+			this.requestUrl = initRequestUrl();
 		}
 
 		@Nullable
@@ -387,7 +401,7 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 		}
 
 		private String initRequestUrl() {
-			return this.baseUrl + (this.requestUri != null ? this.requestUri : this.delegate.get().getRequestURI());
+			return (this.baseUrl + (this.requestUri != null ? this.requestUri : this.delegate.get().getRequestURI()));
 		}
 
 
@@ -409,12 +423,24 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 		}
 
 		private void recalculatePathsIfNecessary() {
+			// Path of delegate request changed, e.g. FORWARD on Tomcat
 			if (!this.actualRequestUri.equals(this.delegate.get().getRequestURI())) {
-				// Underlying path change (e.g. Servlet FORWARD).
 				this.actualRequestUri = this.delegate.get().getRequestURI();
+				// Keep call order
 				this.requestUri = initRequestUri();
-				this.requestUrl = initRequestUrl(); // Keep the order: depends on requestUri
+				this.requestUrl = initRequestUrl();
 			}
+		}
+
+		@Nullable
+		public String getErrorRequestUri() {
+			HttpServletRequest request = this.delegate.get();
+			String requestUri = (String) request.getAttribute(WebUtils.ERROR_REQUEST_URI_ATTRIBUTE);
+			if (this.forwardedPrefix == null || requestUri == null) {
+				return requestUri;
+			}
+			ErrorPathRequest errorRequest = new ErrorPathRequest(request);
+			return this.forwardedPrefix + UrlPathHelper.rawPathInstance.getPathWithinApplication(errorRequest);
 		}
 	}
 
@@ -425,12 +451,10 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 
 		private final HttpServletRequest request;
 
-
 		ForwardedHeaderExtractingResponse(HttpServletResponse response, HttpServletRequest request) {
 			super(response);
 			this.request = request;
 		}
-
 
 		@Override
 		public void sendRedirect(String location) throws IOException {
@@ -469,6 +493,21 @@ public class ForwardedHeaderFilter extends OncePerRequestFilter {
 					.build().normalize().toUriString();
 
 			super.sendRedirect(result);
+		}
+	}
+
+
+	private static class ErrorPathRequest extends HttpServletRequestWrapper {
+
+		ErrorPathRequest(ServletRequest request) {
+			super((HttpServletRequest) request);
+		}
+
+		@Override
+		public String getRequestURI() {
+			String requestUri = (String) getAttribute(WebUtils.ERROR_REQUEST_URI_ATTRIBUTE);
+			Assert.isTrue(requestUri != null, "Expected ERROR requestUri attribute");
+			return requestUri;
 		}
 	}
 

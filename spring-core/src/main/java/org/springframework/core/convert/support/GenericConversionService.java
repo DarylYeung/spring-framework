@@ -16,7 +16,6 @@
 
 package org.springframework.core.convert.support;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
@@ -552,7 +551,7 @@ public class GenericConversionService implements ConfigurableConversionService {
 			int i = 0;
 			while (i < hierarchy.size()) {
 				Class<?> candidate = hierarchy.get(i);
-				candidate = (array ? candidate.getComponentType() : ClassUtils.resolvePrimitiveIfNecessary(candidate));
+				candidate = (array ? candidate.componentType() : ClassUtils.resolvePrimitiveIfNecessary(candidate));
 				Class<?> superclass = candidate.getSuperclass();
 				if (superclass != null && superclass != Object.class && superclass != Enum.class) {
 					addToClassHierarchy(i + 1, candidate.getSuperclass(), array, hierarchy, visited);
@@ -584,7 +583,7 @@ public class GenericConversionService implements ConfigurableConversionService {
 				List<Class<?>> hierarchy, Set<Class<?>> visited) {
 
 			if (asArray) {
-				type = Array.newInstance(type, 0).getClass();
+				type = type.arrayType();
 			}
 			if (visited.add(type)) {
 				hierarchy.add(index, type);

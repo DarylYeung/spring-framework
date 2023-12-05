@@ -34,10 +34,6 @@ import org.aopalliance.intercept.MethodInvocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import test.mixin.LockMixin;
-import test.mixin.LockMixinAdvisor;
-import test.mixin.Lockable;
-import test.mixin.LockedException;
 
 import org.springframework.aop.Advisor;
 import org.springframework.aop.AfterReturningAdvice;
@@ -64,6 +60,10 @@ import org.springframework.aop.testfixture.advice.MyThrowsHandler;
 import org.springframework.aop.testfixture.interceptor.NopInterceptor;
 import org.springframework.aop.testfixture.interceptor.SerializableNopInterceptor;
 import org.springframework.aop.testfixture.interceptor.TimestampIntroductionInterceptor;
+import org.springframework.aop.testfixture.mixin.LockMixin;
+import org.springframework.aop.testfixture.mixin.LockMixinAdvisor;
+import org.springframework.aop.testfixture.mixin.Lockable;
+import org.springframework.aop.testfixture.mixin.LockedException;
 import org.springframework.beans.testfixture.beans.IOther;
 import org.springframework.beans.testfixture.beans.ITestBean;
 import org.springframework.beans.testfixture.beans.Person;
@@ -1915,7 +1915,7 @@ public abstract class AbstractAopProxyTests {
 	}
 
 
-	static abstract class ExposedInvocationTestBean extends TestBean {
+	abstract static class ExposedInvocationTestBean extends TestBean {
 
 		@Override
 		public String getName() {

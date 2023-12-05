@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Properties;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.aop.support.AopUtils;
@@ -67,6 +68,25 @@ public class EnableTransactionManagementTests {
 		Map<?,?> services = ctx.getBeansWithAnnotation(Service.class);
 		assertThat(services.containsKey("testBean")).as("Stereotype annotation not visible").isTrue();
 		ctx.close();
+	}
+
+	@Test  // gh-31238
+	public void cglibProxyClassIsCachedAcrossApplicationContexts() {
+		ConfigurableApplicationContext ctx;
+
+		// Round #1
+		ctx = new AnnotationConfigApplicationContext(EnableTxConfig.class, TxManagerConfig.class);
+		TransactionalTestBean bean1 = ctx.getBean(TransactionalTestBean.class);
+		assertThat(AopUtils.isCglibProxy(bean1)).as("testBean #1 is not a CGLIB proxy").isTrue();
+		ctx.close();
+
+		// Round #2
+		ctx = new AnnotationConfigApplicationContext(EnableTxConfig.class, TxManagerConfig.class);
+		TransactionalTestBean bean2 = ctx.getBean(TransactionalTestBean.class);
+		assertThat(AopUtils.isCglibProxy(bean2)).as("testBean #2 is not a CGLIB proxy").isTrue();
+		ctx.close();
+
+		assertThat(bean1.getClass()).isSameAs(bean2.getClass());
 	}
 
 	@Test
@@ -264,6 +284,22 @@ public class EnableTransactionManagementTests {
 		bean.saveBar();
 		assertThat(txManager.begun).isEqualTo(2);
 		assertThat(txManager.commits).isEqualTo(2);
+		assertThat(txManager.rollbacks).isEqualTo(0);
+
+		ctx.close();
+	}
+
+	@Test
+	@Disabled("gh-24502")
+	public void gh24502AppliesTransactionOnlyOnAnnotatedInterface() {
+		AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(Gh24502ConfigA.class);
+		Object bean = ctx.getBean("testBean");
+		CallCountingTransactionManager txManager = ctx.getBean(CallCountingTransactionManager.class);
+
+		((TransactionalInterface)bean).methodOne();
+		((NonTransactionalInterface)bean).methodTwo();
+		assertThat(txManager.begun).isEqualTo(1);
+		assertThat(txManager.commits).isEqualTo(1);
 		assertThat(txManager.rollbacks).isEqualTo(0);
 
 		ctx.close();
@@ -527,6 +563,45 @@ public class EnableTransactionManagementTests {
 		public PlatformTransactionManager txManager() {
 			return new CallCountingTransactionManager();
 		}
+	}
+
+	@Transactional
+	interface TransactionalInterface {
+
+		void methodOne();
+
+	}
+
+	interface NonTransactionalInterface {
+
+		void methodTwo();
+	}
+
+	static class MixedTransactionalTestService implements TransactionalInterface, NonTransactionalInterface {
+
+		@Override
+		public void methodOne() {
+		}
+
+		@Override
+		public void methodTwo() {
+		}
+	}
+
+	@Configuration
+	@EnableTransactionManagement(proxyTargetClass = false)
+	static class Gh24502ConfigA {
+
+		@Bean
+		public MixedTransactionalTestService testBean() {
+			return new MixedTransactionalTestService();
+		}
+
+		@Bean
+		public PlatformTransactionManager txManager() {
+			return new CallCountingTransactionManager();
+		}
+
 	}
 
 }

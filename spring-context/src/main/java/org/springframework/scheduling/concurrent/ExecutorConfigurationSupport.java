@@ -23,8 +23,6 @@ import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -85,16 +83,10 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	@Nullable
 	private ExecutorService executor;
 
-	private final ReentrantLock pauseLock = new ReentrantLock();
-
-	private final Condition unpaused = this.pauseLock.newCondition();
-
-	private volatile boolean paused;
-
-	private int executingTaskCount = 0;
-
 	@Nullable
-	private Runnable stopCallback;
+	private ExecutorLifecycleDelegate lifecycleDelegate;
+
+	private volatile boolean lateShutdown;
 
 
 	/**
@@ -137,8 +129,9 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 * <p>Default is {@code false} as of 6.1, triggering an early soft shutdown of
 	 * the executor and therefore rejecting any further task submissions. Switch this
 	 * to {@code true} in order to let other components submit tasks even during their
-	 * own destruction callbacks, at the expense of a longer shutdown phase.
-	 * This will usually go along with
+	 * own stop and destruction callbacks, at the expense of a longer shutdown phase.
+	 * The executor will not go through a coordinated lifecycle stop phase then
+	 * but rather only stop tasks on its own shutdown. This usually goes along with
 	 * {@link #setWaitForTasksToCompleteOnShutdown "waitForTasksToCompleteOnShutdown"}.
 	 * <p>This flag will only have effect when the executor is running in a Spring
 	 * application context and able to receive the {@link ContextClosedEvent}.
@@ -154,9 +147,13 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	/**
 	 * Set whether to wait for scheduled tasks to complete on shutdown,
 	 * not interrupting running tasks and executing all tasks in the queue.
-	 * <p>Default is {@code false}, shutting down immediately through interrupting
-	 * ongoing tasks and clearing the queue. Switch this flag to {@code true} if
-	 * you prefer fully completed tasks at the expense of a longer shutdown phase.
+	 * <p>Default is {@code false}, with a coordinated lifecycle stop first (unless
+	 * {@link #setAcceptTasksAfterContextClose "acceptTasksAfterContextClose"}
+	 * has been set) and then an immediate shutdown through interrupting ongoing
+	 * tasks and clearing the queue. Switch this flag to {@code true} if you
+	 * prefer fully completed tasks at the expense of a longer shutdown phase.
+	 * The executor will not go through a coordinated lifecycle stop phase then
+	 * but rather only stop and wait for task completion on its own shutdown.
 	 * <p>Note that Spring's container shutdown continues while ongoing tasks
 	 * are being completed. If you want this executor to block and wait for the
 	 * termination of tasks before the rest of the container continues to shut
@@ -258,6 +255,7 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 			setThreadNamePrefix(this.beanName + "-");
 		}
 		this.executor = initializeExecutor(this.threadFactory, this.rejectedExecutionHandler);
+		this.lifecycleDelegate = new ExecutorLifecycleDelegate(this.executor);
 	}
 
 	/**
@@ -372,13 +370,8 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 */
 	@Override
 	public void start() {
-		this.pauseLock.lock();
-		try {
-			this.paused = false;
-			this.unpaused.signalAll();
-		}
-		finally {
-			this.pauseLock.unlock();
+		if (this.lifecycleDelegate != null) {
+			this.lifecycleDelegate.start();
 		}
 	}
 
@@ -388,13 +381,8 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 */
 	@Override
 	public void stop() {
-		this.pauseLock.lock();
-		try {
-			this.paused = true;
-			this.stopCallback = null;
-		}
-		finally {
-			this.pauseLock.unlock();
+		if (this.lifecycleDelegate != null && !this.lateShutdown) {
+			this.lifecycleDelegate.stop();
 		}
 	}
 
@@ -405,19 +393,11 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 */
 	@Override
 	public void stop(Runnable callback) {
-		this.pauseLock.lock();
-		try {
-			this.paused = true;
-			if (this.executingTaskCount == 0) {
-				this.stopCallback = null;
-				callback.run();
-			}
-			else {
-				this.stopCallback = callback;
-			}
+		if (this.lifecycleDelegate != null && !this.lateShutdown) {
+			this.lifecycleDelegate.stop(callback);
 		}
-		finally {
-			this.pauseLock.unlock();
+		else {
+			callback.run();
 		}
 	}
 
@@ -429,7 +409,7 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 */
 	@Override
 	public boolean isRunning() {
-		return (this.executor != null && !this.executor.isShutdown() & !this.paused);
+		return (this.lifecycleDelegate != null && this.lifecycleDelegate.isRunning());
 	}
 
 	/**
@@ -442,18 +422,8 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 * @see ThreadPoolExecutor#beforeExecute(Thread, Runnable)
 	 */
 	protected void beforeExecute(Thread thread, Runnable task) {
-		this.pauseLock.lock();
-		try {
-			while (this.paused && this.executor != null && !this.executor.isShutdown()) {
-				this.unpaused.await();
-			}
-		}
-		catch (InterruptedException ex) {
-			thread.interrupt();
-		}
-		finally {
-			this.executingTaskCount++;
-			this.pauseLock.unlock();
+		if (this.lifecycleDelegate != null) {
+			this.lifecycleDelegate.beforeExecute(thread);
 		}
 	}
 
@@ -467,19 +437,8 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 * @see ThreadPoolExecutor#afterExecute(Runnable, Throwable)
 	 */
 	protected void afterExecute(Runnable task, @Nullable Throwable ex) {
-		this.pauseLock.lock();
-		try {
-			this.executingTaskCount--;
-			if (this.executingTaskCount == 0) {
-				Runnable callback = this.stopCallback;
-				if (callback != null) {
-					callback.run();
-					this.stopCallback = null;
-				}
-			}
-		}
-		finally {
-			this.pauseLock.unlock();
+		if (this.lifecycleDelegate != null) {
+			this.lifecycleDelegate.afterExecute();
 		}
 	}
 
@@ -490,10 +449,16 @@ public abstract class ExecutorConfigurationSupport extends CustomizableThreadFac
 	 */
 	@Override
 	public void onApplicationEvent(ContextClosedEvent event) {
-		if (event.getApplicationContext() == this.applicationContext && !this.acceptTasksAfterContextClose) {
-			// Early shutdown signal: accept no further tasks, let existing tasks complete
-			// before hitting the actual destruction step in the shutdown() method above.
-			initiateShutdown();
+		if (event.getApplicationContext() == this.applicationContext) {
+			if (this.acceptTasksAfterContextClose || this.waitForTasksToCompleteOnShutdown) {
+				// Late shutdown without early stop lifecycle.
+				this.lateShutdown = true;
+			}
+			else {
+				// Early shutdown signal: accept no further tasks, let existing tasks complete
+				// before hitting the actual destruction step in the shutdown() method above.
+				initiateShutdown();
+			}
 		}
 	}
 

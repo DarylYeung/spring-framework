@@ -225,7 +225,7 @@ public class MessageBrokerConfigurationTests {
 		assertThat(handlers.contains(context.getBean(UserDestinationMessageHandler.class))).isTrue();
 		assertThat(handlers.contains(context.getBean(SimpleBrokerMessageHandler.class))).isTrue();
 
-		assertThat((Object) channel.getExecutor()).isNull();
+		assertThat(channel.getExecutor()).isNull();
 	}
 
 	@Test
@@ -479,7 +479,7 @@ public class MessageBrokerConfigurationTests {
 		assertThat(registry.getClass()).isNotEqualTo(MultiServerUserRegistry.class);
 
 		UserDestinationMessageHandler handler = context.getBean(UserDestinationMessageHandler.class);
-		assertThat((Object) handler.getBroadcastDestination()).isNull();
+		assertThat(handler.getBroadcastDestination()).isNull();
 
 		Object nullBean = context.getBean("userRegistryMessageHandler");
 		assertThat(nullBean.equals(null)).isTrue();
@@ -682,7 +682,7 @@ public class MessageBrokerConfigurationTests {
 
 
 	@Configuration
-	static abstract class BaseDotSeparatorConfig extends BaseTestMessageBrokerConfig {
+	abstract static class BaseDotSeparatorConfig extends BaseTestMessageBrokerConfig {
 
 		@Override
 		protected void configureMessageBroker(MessageBrokerRegistry registry) {

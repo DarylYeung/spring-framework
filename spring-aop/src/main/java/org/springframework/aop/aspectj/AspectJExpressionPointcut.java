@@ -78,6 +78,7 @@ import org.springframework.util.StringUtils;
  * @author Juergen Hoeller
  * @author Ramnivas Laddad
  * @author Dave Syer
+ * @author Yanming Zhou
  * @since 2.0
  */
 @SuppressWarnings("serial")
@@ -471,10 +472,11 @@ public class AspectJExpressionPointcut extends AbstractExpressionPointcut
 							}
 						}
 						if (targetMethod != originalMethod && (shadowMatch == null ||
-								(shadowMatch.neverMatches() && Proxy.isProxyClass(targetMethod.getDeclaringClass())))) {
+								(Proxy.isProxyClass(targetMethod.getDeclaringClass()) &&
+										(shadowMatch.neverMatches() || containsAnnotationPointcut())))) {
 							// Fall back to the plain original method in case of no resolvable match or a
 							// negative match on a proxy class (which doesn't carry any annotations on its
-							// redeclared methods).
+							// redeclared methods), as well as for annotation pointcuts.
 							methodToMatch = originalMethod;
 							try {
 								shadowMatch = obtainPointcutExpression().matchesMethodExecution(methodToMatch);
@@ -513,6 +515,10 @@ public class AspectJExpressionPointcut extends AbstractExpressionPointcut
 		return shadowMatch;
 	}
 
+	private boolean containsAnnotationPointcut() {
+		return resolveExpression().contains("@annotation");
+	}
+
 
 	@Override
 	public boolean equals(@Nullable Object other) {
@@ -525,11 +531,8 @@ public class AspectJExpressionPointcut extends AbstractExpressionPointcut
 
 	@Override
 	public int hashCode() {
-		int hashCode = ObjectUtils.nullSafeHashCode(getExpression());
-		hashCode = 31 * hashCode + ObjectUtils.nullSafeHashCode(this.pointcutDeclarationScope);
-		hashCode = 31 * hashCode + ObjectUtils.nullSafeHashCode(this.pointcutParameterNames);
-		hashCode = 31 * hashCode + ObjectUtils.nullSafeHashCode(this.pointcutParameterTypes);
-		return hashCode;
+		return ObjectUtils.nullSafeHash(getExpression(), this.pointcutDeclarationScope,
+				this.pointcutParameterNames, this.pointcutParameterTypes);
 	}
 
 	@Override

@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -182,7 +183,7 @@ public class MultiServerUserRegistry implements SimpUserRegistry, SmartApplicati
 
 	@Override
 	public String toString() {
-		return "local=[" + this.localRegistry +	"], remote=" + this.remoteRegistries;
+		return "local=[" + this.localRegistry + "], remote=" + this.remoteRegistries;
 	}
 
 
@@ -369,8 +370,8 @@ public class MultiServerUserRegistry implements SimpUserRegistry, SmartApplicati
 
 
 		@Override
-		public boolean equals(@Nullable Object obj) {
-			return (this == obj || (obj instanceof SimpUser that && this.name.equals(that.getName())));
+		public boolean equals(@Nullable Object other) {
+			return (this == other || (other instanceof SimpUser that && this.name.equals(that.getName())));
 		}
 
 		@Override
@@ -455,8 +456,8 @@ public class MultiServerUserRegistry implements SimpUserRegistry, SmartApplicati
 		}
 
 		@Override
-		public boolean equals(@Nullable Object obj) {
-			return (this == obj || (obj instanceof SimpSession that && this.id.equals(that.getId())));
+		public boolean equals(@Nullable Object other) {
+			return (this == other || (other instanceof SimpSession that && this.id.equals(that.getId())));
 		}
 
 		@Override
@@ -539,7 +540,7 @@ public class MultiServerUserRegistry implements SimpUserRegistry, SmartApplicati
 
 		@Override
 		public int hashCode() {
-			return getId().hashCode() * 31 + ObjectUtils.nullSafeHashCode(getSession());
+			return Objects.hash(getId(), getSession());
 		}
 
 		@Override

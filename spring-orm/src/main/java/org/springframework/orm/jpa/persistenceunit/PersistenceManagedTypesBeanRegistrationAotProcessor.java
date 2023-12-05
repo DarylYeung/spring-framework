@@ -17,7 +17,6 @@
 package org.springframework.orm.jpa.persistenceunit;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Executable;
 import java.util.List;
 
 import javax.lang.model.element.Modifier;
@@ -65,10 +64,25 @@ import org.springframework.util.ReflectionUtils;
  * @author Sebastien Deleuze
  * @since 6.0
  */
+@SuppressWarnings("unchecked")
 class PersistenceManagedTypesBeanRegistrationAotProcessor implements BeanRegistrationAotProcessor {
 
 	private static final List<Class<? extends Annotation>> CALLBACK_TYPES = List.of(PreUpdate.class,
 			PostUpdate.class, PrePersist.class, PostPersist.class, PreRemove.class, PostRemove.class, PostLoad.class);
+
+	@Nullable
+	private static Class<? extends Annotation> embeddableInstantiatorClass;
+
+	static {
+		try {
+			embeddableInstantiatorClass = (Class<? extends Annotation>) ClassUtils.forName("org.hibernate.annotations.EmbeddableInstantiator",
+					PersistenceManagedTypesBeanRegistrationAotProcessor.class.getClassLoader());
+		}
+		catch (ClassNotFoundException ex) {
+			embeddableInstantiatorClass = null;
+		}
+	}
+
 
 	@Nullable
 	@Override
@@ -97,7 +111,6 @@ class PersistenceManagedTypesBeanRegistrationAotProcessor implements BeanRegistr
 		@Override
 		public CodeBlock generateInstanceSupplierCode(GenerationContext generationContext,
 				BeanRegistrationCode beanRegistrationCode,
-				Executable constructorOrFactoryMethod,
 				boolean allowDirectSupplierShortcut) {
 			PersistenceManagedTypes persistenceManagedTypes = this.registeredBean.getBeanFactory()
 					.getBean(this.registeredBean.getBeanName(), PersistenceManagedTypes.class);
@@ -131,6 +144,7 @@ class PersistenceManagedTypesBeanRegistrationAotProcessor implements BeanRegistr
 					contributeIdClassHints(hints, managedClass);
 					contributeConverterHints(hints, managedClass);
 					contributeCallbackHints(hints, managedClass);
+					contributeHibernateHints(hints, managedClass);
 				}
 				catch (ClassNotFoundException ex) {
 					throw new IllegalArgumentException("Failed to instantiate the managed class: " + managedClassName, ex);
@@ -177,6 +191,30 @@ class PersistenceManagedTypesBeanRegistrationAotProcessor implements BeanRegistr
 			ReflectionUtils.doWithMethods(managedClass, method ->
 					reflection.registerMethod(method, ExecutableMode.INVOKE),
 					method -> CALLBACK_TYPES.stream().anyMatch(method::isAnnotationPresent));
+		}
+
+		@SuppressWarnings("unchecked")
+		private void contributeHibernateHints(RuntimeHints hints, Class<?> managedClass) {
+			if (embeddableInstantiatorClass == null) {
+				return;
+			}
+			ReflectionHints reflection = hints.reflection();
+			registerInstantiatorForReflection(reflection,
+					AnnotationUtils.findAnnotation(managedClass, embeddableInstantiatorClass));
+			ReflectionUtils.doWithFields(managedClass, field -> {
+				registerInstantiatorForReflection(reflection,
+						AnnotationUtils.findAnnotation(field, embeddableInstantiatorClass));
+				registerInstantiatorForReflection(reflection,
+						AnnotationUtils.findAnnotation(field.getType(), embeddableInstantiatorClass));
+			});
+		}
+
+		private void registerInstantiatorForReflection(ReflectionHints reflection, @Nullable Annotation annotation) {
+			if (annotation == null) {
+				return;
+			}
+			Class<?> embeddableInstantiatorClass = (Class<?>) AnnotationUtils.getAnnotationAttributes(annotation).get("value");
+			reflection.registerType(embeddableInstantiatorClass, MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
 		}
 	}
 }

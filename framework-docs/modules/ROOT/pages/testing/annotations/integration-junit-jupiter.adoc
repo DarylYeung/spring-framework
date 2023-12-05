@@ -11,6 +11,7 @@ xref:testing/testcontext-framework/support-classes.adoc#testcontext-junit-jupite
 * xref:testing/annotations/integration-junit-jupiter.adoc#integration-testing-annotations-nestedtestconfiguration[`@NestedTestConfiguration`]
 * xref:testing/annotations/integration-junit-jupiter.adoc#integration-testing-annotations-junit-jupiter-enabledif[`@EnabledIf`]
 * xref:testing/annotations/integration-junit-jupiter.adoc#integration-testing-annotations-junit-jupiter-disabledif[`@DisabledIf`]
+* xref:testing/annotations/integration-spring/annotation-disabledinaotmode.adoc[`@DisabledInAotMode`]
 
 [[integration-testing-annotations-junit-jupiter-springjunitconfig]]
 == `@SpringJUnitConfig`
@@ -81,7 +82,7 @@ Kotlin::
 
 
 See xref:testing/testcontext-framework/ctx-management.adoc[Context Management] as well as the javadoc for
-{api-spring-framework}/test/context/junit/jupiter/SpringJUnitConfig.html[`@SpringJUnitConfig`]
+{spring-framework-api}/test/context/junit/jupiter/SpringJUnitConfig.html[`@SpringJUnitConfig`]
 and `@ContextConfiguration` for further details.
 
 [[integration-testing-annotations-junit-jupiter-springjunitwebconfig]]
@@ -156,9 +157,9 @@ Kotlin::
 
 
 See xref:testing/testcontext-framework/ctx-management.adoc[Context Management] as well as the javadoc for
-{api-spring-framework}/test/context/junit/jupiter/web/SpringJUnitWebConfig.html[`@SpringJUnitWebConfig`],
-{api-spring-framework}/test/context/ContextConfiguration.html[`@ContextConfiguration`], and
-{api-spring-framework}/test/context/web/WebAppConfiguration.html[`@WebAppConfiguration`]
+{spring-framework-api}/test/context/junit/jupiter/web/SpringJUnitWebConfig.html[`@SpringJUnitWebConfig`],
+{spring-framework-api}/test/context/ContextConfiguration.html[`@ContextConfiguration`], and
+{spring-framework-api}/test/context/web/WebAppConfiguration.html[`@WebAppConfiguration`]
 for further details.
 
 [[integration-testing-annotations-testconstructor]]
@@ -170,8 +171,9 @@ of a test class constructor are autowired from components in the test's
 
 If `@TestConstructor` is not present or meta-present on a test class, the default _test
 constructor autowire mode_ will be used. See the tip below for details on how to change
-the default mode. Note, however, that a local declaration of `@Autowired` on a
-constructor takes precedence over both `@TestConstructor` and the default mode.
+the default mode. Note, however, that a local declaration of `@Autowired`,
+`@jakarta.inject.Inject`, or `@javax.inject.Inject` on a constructor takes precedence
+over both `@TestConstructor` and the default mode.
 
 .Changing the default test constructor autowire mode
 [TIP]
@@ -222,6 +224,7 @@ following annotations.
 * xref:testing/annotations/integration-spring/annotation-contextconfiguration.adoc[`@ContextConfiguration`]
 * xref:testing/annotations/integration-spring/annotation-webappconfiguration.adoc[`@WebAppConfiguration`]
 * xref:testing/annotations/integration-spring/annotation-contexthierarchy.adoc[`@ContextHierarchy`]
+* xref:testing/annotations/integration-spring/annotation-contextcustomizerfactories.adoc[`@ContextCustomizerFactories`]
 * xref:testing/annotations/integration-spring/annotation-activeprofiles.adoc[`@ActiveProfiles`]
 * xref:testing/annotations/integration-spring/annotation-testpropertysource.adoc[`@TestPropertySource`]
 * xref:testing/annotations/integration-spring/annotation-dynamicpropertysource.adoc[`@DynamicPropertySource`]

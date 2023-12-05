@@ -22,6 +22,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -230,13 +231,13 @@ public class DataBinder implements PropertyEditorRegistry, TypeConverter {
 
 	/**
 	 * Set the type for the target object. When the target is {@code null},
-	 * setting the targetType allows using {@link #construct} to
-	 * create the target.
+	 * setting the targetType allows using {@link #construct} to create the target.
 	 * @param targetType the type of the target object
 	 * @since 6.1
+	 * @see #construct
 	 */
 	public void setTargetType(ResolvableType targetType) {
-		Assert.state(this.target == null, "targetType is used to for target creation, but target is already set");
+		Assert.state(this.target == null, "targetType is used to for target creation but target is already set");
 		this.targetType = targetType;
 	}
 
@@ -458,8 +459,8 @@ public class DataBinder implements PropertyEditorRegistry, TypeConverter {
 	 * <p>Note that this setting only applies to <i>binding</i> operations
 	 * on this DataBinder, not to <i>retrieving</i> values via its
 	 * {@link #getBindingResult() BindingResult}.
-	 * <p>Used for binding to fields with {@link #bind(PropertyValues)}, and not
-	 * applicable to constructor binding via {@link #construct},
+	 * <p>Used for binding to fields with {@link #bind(PropertyValues)},
+	 * and not applicable to constructor binding via {@link #construct}
 	 * which uses only the values it needs.
 	 * @see #bind
 	 */
@@ -895,7 +896,7 @@ public class DataBinder implements PropertyEditorRegistry, TypeConverter {
 	 * @throws BeanInstantiationException in case of constructor failure
 	 * @since 6.1
 	 */
-	public final void construct(ValueResolver valueResolver) {
+	public void construct(ValueResolver valueResolver) {
 		Assert.state(this.target == null, "Target instance already available");
 		Assert.state(this.targetType != null, "Target type not set");
 
@@ -947,9 +948,9 @@ public class DataBinder implements PropertyEditorRegistry, TypeConverter {
 				Class<?> paramType = paramTypes[i];
 				Object value = valueResolver.resolveValue(paramPath, paramType);
 
-				if (value == null && !BeanUtils.isSimpleValueType(param.nestedIfOptional().getNestedParameterType())) {
+				if (value == null && shouldConstructArgument(param)) {
 					ResolvableType type = ResolvableType.forMethodParameter(param);
-					args[i]  = createObject(type, paramPath + ".", valueResolver);
+					args[i] = createObject(type, paramPath + ".", valueResolver);
 				}
 				else {
 					try {
@@ -1005,6 +1006,20 @@ public class DataBinder implements PropertyEditorRegistry, TypeConverter {
 		}
 
 		return (isOptional && !nestedPath.isEmpty() ? Optional.ofNullable(result) : result);
+	}
+
+	/**
+	 * Whether to instantiate the constructor argument of the given type,
+	 * matching its own constructor arguments to bind values.
+	 * <p>By default, simple value types, maps, collections, and arrays are
+	 * excluded from nested constructor binding initialization.
+	 * @since 6.1.2
+	 */
+	protected boolean shouldConstructArgument(MethodParameter param) {
+		Class<?> type = param.nestedIfOptional().getNestedParameterType();
+		return !(BeanUtils.isSimpleValueType(type) ||
+				Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type) || type.isArray() ||
+				type.getPackageName().startsWith("java."));
 	}
 
 	private void validateConstructorArgument(
@@ -1259,21 +1274,20 @@ public class DataBinder implements PropertyEditorRegistry, TypeConverter {
 
 	/**
 	 * Strategy to determine the name of the value to bind to a method parameter.
-	 * Supported on constructor parameters with {@link #construct constructor
-	 * binding} which performs lookups via {@link ValueResolver#resolveValue}.
+	 * Supported on constructor parameters with {@link #construct constructor binding}
+	 * which performs lookups via {@link ValueResolver#resolveValue}.
 	 */
 	public interface NameResolver {
 
 		/**
 		 * Return the name to use for the given method parameter, or {@code null}
 		 * if unresolved. For constructor parameters, the name is determined via
-		 * {@link org.springframework.core.DefaultParameterNameDiscoverer} if
-		 * unresolved.
+		 * {@link org.springframework.core.DefaultParameterNameDiscoverer} if unresolved.
 		 */
 		@Nullable
 		String resolveName(MethodParameter parameter);
-
 	}
+
 
 	/**
 	 * Strategy for {@link #construct constructor binding} to look up the values
@@ -1291,7 +1305,6 @@ public class DataBinder implements PropertyEditorRegistry, TypeConverter {
 		 */
 		@Nullable
 		Object resolveValue(String name, Class<?> type);
-
 	}
 
 

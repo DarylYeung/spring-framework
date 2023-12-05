@@ -17,17 +17,24 @@
 package org.springframework.jdbc.core.simple;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import javax.sql.DataSource;
 
+import org.springframework.beans.BeanUtils;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.PreparedStatementCreatorFactory;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.SimplePropertyRowMapper;
+import org.springframework.jdbc.core.SingleColumnRowMapper;
 import org.springframework.jdbc.core.SqlParameterValue;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
@@ -36,6 +43,7 @@ import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.jdbc.support.rowset.SqlRowSet;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
@@ -43,6 +51,7 @@ import org.springframework.util.Assert;
  * as created by the static factory methods.
  *
  * @author Juergen Hoeller
+ * @author Sam Brannen
  * @since 6.1
  * @see JdbcClient#create(DataSource)
  * @see JdbcClient#create(JdbcOperations)
@@ -53,6 +62,8 @@ final class DefaultJdbcClient implements JdbcClient {
 	private final JdbcOperations classicOps;
 
 	private final NamedParameterJdbcOperations namedParamOps;
+
+	private final Map<Class<?>, RowMapper<?>> rowMapperCache = new ConcurrentHashMap<>();
 
 
 	public DefaultJdbcClient(DataSource dataSource) {
@@ -94,16 +105,18 @@ final class DefaultJdbcClient implements JdbcClient {
 		}
 
 		@Override
-		public StatementSpec param(Object value) {
+		public StatementSpec param(@Nullable Object value) {
+			validateIndexedParamValue(value);
 			this.indexedParams.add(value);
 			return this;
 		}
 
 		@Override
-		public StatementSpec param(int jdbcIndex, Object value) {
+		public StatementSpec param(int jdbcIndex, @Nullable Object value) {
 			if (jdbcIndex < 1) {
 				throw new IllegalArgumentException("Invalid JDBC index: needs to start at 1");
 			}
+			validateIndexedParamValue(value);
 			int index = jdbcIndex - 1;
 			int size = this.indexedParams.size();
 			if (index < size) {
@@ -118,20 +131,34 @@ final class DefaultJdbcClient implements JdbcClient {
 			return this;
 		}
 
+		private void validateIndexedParamValue(@Nullable Object value) {
+			if (value instanceof Iterable) {
+				throw new IllegalArgumentException("Invalid positional parameter value of type Iterable (" +
+						value.getClass().getSimpleName() +
+						"): Parameter expansion is only supported with named parameters.");
+			}
+		}
+
 		@Override
-		public StatementSpec param(int jdbcIndex, Object value, int sqlType) {
+		public StatementSpec param(int jdbcIndex, @Nullable Object value, int sqlType) {
 			return param(jdbcIndex, new SqlParameterValue(sqlType, value));
 		}
 
 		@Override
-		public StatementSpec param(String name, Object value) {
+		public StatementSpec param(String name, @Nullable Object value) {
 			this.namedParams.addValue(name, value);
 			return this;
 		}
 
 		@Override
-		public StatementSpec param(String name, Object value, int sqlType) {
+		public StatementSpec param(String name, @Nullable Object value, int sqlType) {
 			this.namedParams.addValue(name, value, sqlType);
+			return this;
+		}
+
+		@Override
+		public StatementSpec params(Object... values) {
+			Collections.addAll(this.indexedParams, values);
 			return this;
 		}
 
@@ -169,6 +196,15 @@ final class DefaultJdbcClient implements JdbcClient {
 					new IndexedParamResultQuerySpec());
 		}
 
+		@SuppressWarnings("unchecked")
+		@Override
+		public <T> MappedQuerySpec<T> query(Class<T> mappedClass) {
+			RowMapper<?> rowMapper = rowMapperCache.computeIfAbsent(mappedClass, key ->
+					BeanUtils.isSimpleProperty(mappedClass) ? new SingleColumnRowMapper<>(mappedClass) :
+							new SimplePropertyRowMapper<>(mappedClass));
+			return query((RowMapper<T>) rowMapper);
+		}
+
 		@Override
 		public <T> MappedQuerySpec<T> query(RowMapper<T> rowMapper) {
 			return (useNamedParams() ?
@@ -179,18 +215,18 @@ final class DefaultJdbcClient implements JdbcClient {
 		@Override
 		public void query(RowCallbackHandler rch) {
 			if (useNamedParams()) {
-				namedParamOps.query(this.sql, this.namedParams, rch);
+				namedParamOps.query(this.sql, this.namedParamSource, rch);
 			}
 			else {
-				classicOps.query(this.sql, rch, this.indexedParams.toArray());
+				classicOps.query(statementCreatorForIndexedParams(), rch);
 			}
 		}
 
 		@Override
 		public <T> T query(ResultSetExtractor<T> rse) {
 			T result = (useNamedParams() ?
-					namedParamOps.query(this.sql, this.namedParams, rse) :
-					classicOps.query(this.sql, rse, this.indexedParams.toArray()));
+					namedParamOps.query(this.sql, this.namedParamSource, rse) :
+					classicOps.query(statementCreatorForIndexedParams(), rse));
 			Assert.state(result != null, "No result from ResultSetExtractor");
 			return result;
 		}
@@ -199,14 +235,21 @@ final class DefaultJdbcClient implements JdbcClient {
 		public int update() {
 			return (useNamedParams() ?
 					namedParamOps.update(this.sql, this.namedParamSource) :
-					classicOps.update(this.sql, this.indexedParams.toArray()));
+					classicOps.update(statementCreatorForIndexedParams()));
 		}
 
 		@Override
 		public int update(KeyHolder generatedKeyHolder) {
 			return (useNamedParams() ?
 					namedParamOps.update(this.sql, this.namedParamSource, generatedKeyHolder) :
-					classicOps.update(this.sql, this.indexedParams.toArray(), generatedKeyHolder));
+					classicOps.update(statementCreatorForIndexedParamsWithKeys(null), generatedKeyHolder));
+		}
+
+		@Override
+		public int update(KeyHolder generatedKeyHolder, String... keyColumnNames) {
+			return (useNamedParams() ?
+					namedParamOps.update(this.sql, this.namedParamSource, generatedKeyHolder, keyColumnNames) :
+					classicOps.update(statementCreatorForIndexedParamsWithKeys(keyColumnNames), generatedKeyHolder));
 		}
 
 		private boolean useNamedParams() {
@@ -219,6 +262,21 @@ final class DefaultJdbcClient implements JdbcClient {
 						"Configure either individual named parameters or a SqlParameterSource, not both");
 			}
 			return hasNamedParams;
+		}
+
+		private PreparedStatementCreator statementCreatorForIndexedParams() {
+			return new PreparedStatementCreatorFactory(this.sql).newPreparedStatementCreator(this.indexedParams);
+		}
+
+		private PreparedStatementCreator statementCreatorForIndexedParamsWithKeys(@Nullable String[] keyColumnNames) {
+			PreparedStatementCreatorFactory pscf = new PreparedStatementCreatorFactory(this.sql);
+			if (keyColumnNames != null) {
+				pscf.setGeneratedKeysColumnNames(keyColumnNames);
+			}
+			else {
+				pscf.setReturnGeneratedKeys(true);
+			}
+			return pscf.newPreparedStatementCreator(this.indexedParams);
 		}
 
 
@@ -240,8 +298,8 @@ final class DefaultJdbcClient implements JdbcClient {
 			}
 
 			@Override
-			public <T> List<T> singleColumn(Class<T> requiredType) {
-				return classicOps.queryForList(sql, requiredType, indexedParams.toArray());
+			public List<Object> singleColumn() {
+				return classicOps.queryForList(sql, Object.class, indexedParams.toArray());
 			}
 		}
 
@@ -264,8 +322,8 @@ final class DefaultJdbcClient implements JdbcClient {
 			}
 
 			@Override
-			public <T> List<T> singleColumn(Class<T> requiredType) {
-				return namedParamOps.queryForList(sql, namedParamSource, requiredType);
+			public List<Object> singleColumn() {
+				return namedParamOps.queryForList(sql, namedParamSource, Object.class);
 			}
 		}
 

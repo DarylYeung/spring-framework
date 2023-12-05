@@ -62,21 +62,26 @@ import org.springframework.web.util.UriBuilder;
 import org.springframework.web.util.UriBuilderFactory;
 
 /**
- * Default implementation of {@link WebClient}.
+ * The default implementation of {@link WebClient},
+ * as created by the static factory methods.
  *
  * @author Rossen Stoyanchev
  * @author Brian Clozel
  * @author Sebastien Deleuze
  * @since 5.0
+ * @see WebClient#create()
+ * @see WebClient#create(String)
  */
-class DefaultWebClient implements WebClient {
+final class DefaultWebClient implements WebClient {
 
 	private static final String URI_TEMPLATE_ATTRIBUTE = WebClient.class.getName() + ".uriTemplate";
 
 	private static final Mono<ClientResponse> NO_HTTP_CLIENT_RESPONSE_ERROR = Mono.error(
 			() -> new IllegalStateException("The underlying HTTP client completed without emitting a response."));
 
-	private static final DefaultClientRequestObservationConvention DEFAULT_OBSERVATION_CONVENTION = new DefaultClientRequestObservationConvention();
+	private static final DefaultClientRequestObservationConvention DEFAULT_OBSERVATION_CONVENTION =
+			new DefaultClientRequestObservationConvention();
+
 
 	private final ExchangeFunction exchangeFunction;
 
@@ -104,9 +109,9 @@ class DefaultWebClient implements WebClient {
 	private final DefaultWebClientBuilder builder;
 
 
-	DefaultWebClient(ExchangeFunction exchangeFunction, @Nullable ExchangeFilterFunction filterFunctions, UriBuilderFactory uriBuilderFactory,
-			@Nullable HttpHeaders defaultHeaders, @Nullable MultiValueMap<String, String> defaultCookies,
-			@Nullable Consumer<RequestHeadersSpec<?>> defaultRequest,
+	DefaultWebClient(ExchangeFunction exchangeFunction, @Nullable ExchangeFilterFunction filterFunctions,
+			UriBuilderFactory uriBuilderFactory, @Nullable HttpHeaders defaultHeaders,
+			@Nullable MultiValueMap<String, String> defaultCookies, @Nullable Consumer<RequestHeadersSpec<?>> defaultRequest,
 			@Nullable Map<Predicate<HttpStatusCode>, Function<ClientResponse, Mono<? extends Throwable>>> statusHandlerMap,
 			ObservationRegistry observationRegistry, @Nullable ClientRequestObservationConvention observationConvention,
 			DefaultWebClientBuilder builder) {
@@ -116,10 +121,10 @@ class DefaultWebClient implements WebClient {
 		this.uriBuilderFactory = uriBuilderFactory;
 		this.defaultHeaders = defaultHeaders;
 		this.defaultCookies = defaultCookies;
-		this.observationRegistry = observationRegistry;
-		this.observationConvention = observationConvention;
 		this.defaultRequest = defaultRequest;
 		this.defaultStatusHandlers = initStatusHandlers(statusHandlerMap);
+		this.observationRegistry = observationRegistry;
+		this.observationConvention = observationConvention;
 		this.builder = builder;
 	}
 
@@ -183,11 +188,11 @@ class DefaultWebClient implements WebClient {
 	}
 
 	private static Mono<Void> releaseIfNotConsumed(ClientResponse response) {
-		return response.releaseBody().onErrorResume(ex2 -> Mono.empty());
+		return response.releaseBody().onErrorComplete();
 	}
 
 	private static <T> Mono<T> releaseIfNotConsumed(ClientResponse response, Throwable ex) {
-		return response.releaseBody().onErrorResume(ex2 -> Mono.empty()).then(Mono.error(ex));
+		return response.releaseBody().onErrorComplete().then(Mono.error(ex));
 	}
 
 
@@ -215,11 +220,9 @@ class DefaultWebClient implements WebClient {
 		@Nullable
 		private Consumer<ClientHttpRequest> httpRequestConsumer;
 
-
 		DefaultRequestBodyUriSpec(HttpMethod httpMethod) {
 			this.httpMethod = httpMethod;
 		}
-
 
 		@Override
 		public RequestBodySpec uri(String uriTemplate, Object... uriVariables) {
@@ -338,8 +341,8 @@ class DefaultWebClient implements WebClient {
 			return this;
 		}
 
-		@Override
 		@SuppressWarnings("deprecation")
+		@Override
 		public RequestBodySpec context(Function<Context, Context> contextModifier) {
 			this.contextModifier = (this.contextModifier != null ?
 					this.contextModifier.andThen(contextModifier) : contextModifier);
@@ -431,8 +434,8 @@ class DefaultWebClient implements WebClient {
 			});
 		}
 
-		@Override
 		@SuppressWarnings("deprecation")
+		@Override
 		public Mono<ClientResponse> exchange() {
 			ClientRequestObservationContext observationContext = new ClientRequestObservationContext();
 			ClientRequest.Builder requestBuilder = initRequestBuilder();
@@ -447,7 +450,9 @@ class DefaultWebClient implements WebClient {
 				if (filterFunctions != null) {
 					filterFunction = filterFunctions.andThen(filterFunction);
 				}
-				ClientRequest request = requestBuilder.build();
+				ClientRequest request = requestBuilder
+						.attribute(ClientRequestObservationContext.CURRENT_OBSERVATION_CONTEXT_ATTRIBUTE, observation.getContext())
+						.build();
 				observationContext.setUriTemplate((String) request.attribute(URI_TEMPLATE_ATTRIBUTE).orElse(null));
 				observationContext.setRequest(request);
 				Mono<ClientResponse> responseMono = filterFunction.apply(exchangeFunction)
@@ -514,10 +519,8 @@ class DefaultWebClient implements WebClient {
 
 	private static class DefaultResponseSpec implements ResponseSpec {
 
-		private static final Predicate<HttpStatusCode> STATUS_CODE_ERROR = HttpStatusCode::isError;
-
 		private static final StatusHandler DEFAULT_STATUS_HANDLER =
-				new StatusHandler(STATUS_CODE_ERROR, ClientResponse::createException);
+				new StatusHandler(code -> code.value() >= 400, ClientResponse::createException);
 
 
 		private final HttpMethod httpMethod;
@@ -530,9 +533,7 @@ class DefaultWebClient implements WebClient {
 
 		private final int defaultStatusHandlerCount;
 
-
-		DefaultResponseSpec(
-				HttpMethod httpMethod, URI uri, Mono<ClientResponse> responseMono,
+		DefaultResponseSpec(HttpMethod httpMethod, URI uri, Mono<ClientResponse> responseMono,
 				List<StatusHandler> defaultStatusHandlers) {
 
 			this.httpMethod = httpMethod;
@@ -542,7 +543,6 @@ class DefaultWebClient implements WebClient {
 			this.statusHandlers.add(DEFAULT_STATUS_HANDLER);
 			this.defaultStatusHandlerCount = this.statusHandlers.size();
 		}
-
 
 		@Override
 		public ResponseSpec onStatus(Predicate<HttpStatusCode> statusCodePredicate,
@@ -701,7 +701,7 @@ class DefaultWebClient implements WebClient {
 		private static URI getUriToLog(URI uri) {
 			if (StringUtils.hasText(uri.getQuery())) {
 				try {
-					uri = new URI(uri.getScheme(), uri.getHost(), uri.getPath(), null);
+					uri = new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), uri.getPath(), null, null);
 				}
 				catch (URISyntaxException ex) {
 					// ignore
@@ -734,6 +734,7 @@ class DefaultWebClient implements WebClient {
 		}
 	}
 
+
 	private static class ObservationFilterFunction implements ExchangeFilterFunction {
 
 		private final ClientRequestObservationContext observationContext;
@@ -744,8 +745,7 @@ class DefaultWebClient implements WebClient {
 
 		@Override
 		public Mono<ClientResponse> filter(ClientRequest request, ExchangeFunction next) {
-			return next.exchange(request)
-						.doOnNext(this.observationContext::setResponse);
+			return next.exchange(request).doOnNext(this.observationContext::setResponse);
 		}
 	}
 

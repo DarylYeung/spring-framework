@@ -55,6 +55,7 @@ import org.springframework.util.Assert;
  *     .first();</pre>
  *
  * @author Mark Paluch
+ * @author Juergen Hoeller
  * @since 5.3
  */
 public interface DatabaseClient extends ConnectionAccessor {
@@ -163,10 +164,9 @@ public interface DatabaseClient extends ConnectionAccessor {
 	interface GenericExecuteSpec {
 
 		/**
-		 * Bind a non-{@code null} value to a parameter identified by its
-		 * {@code index}. {@code value} can be either a scalar value or {@link io.r2dbc.spi.Parameter}.
+		 * Bind a non-{@code null} value to a parameter identified by its {@code index}.
 		 * @param index zero based index to bind the parameter to
-		 * @param value either a scalar value or {@link io.r2dbc.spi.Parameter}
+		 * @param value either a scalar value or a {@link io.r2dbc.spi.Parameter}
 		 */
 		GenericExecuteSpec bind(int index, Object value);
 
@@ -180,7 +180,7 @@ public interface DatabaseClient extends ConnectionAccessor {
 		/**
 		 * Bind a non-{@code null} value to a parameter identified by its {@code name}.
 		 * @param name the name of the parameter
-		 * @param value the value to bind
+		 * @param value either a scalar value or a {@link io.r2dbc.spi.Parameter}
 		 */
 		GenericExecuteSpec bind(String name, Object value);
 
@@ -190,6 +190,25 @@ public interface DatabaseClient extends ConnectionAccessor {
 		 * @param type the parameter type
 		 */
 		GenericExecuteSpec bindNull(String name, Class<?> type);
+
+		/**
+		 * Bind the parameter values from the given source map,
+		 * registering each as a parameter with the map key as name.
+		 * @param source the source map of parameters, with keys as names and
+		 * each value either a scalar value or a {@link io.r2dbc.spi.Parameter}
+		 * @since 6.1
+		 * @see #bindProperties
+		 */
+		GenericExecuteSpec bindValues(Map<String, ?> source);
+
+		/**
+		 * Bind the bean properties or record components from the given
+		 * source object, registering each as a named parameter.
+		 * @param source the source object (a JavaBean or record)
+		 * @since 6.1
+		 * @see #mapProperties
+		 */
+		GenericExecuteSpec bindProperties(Object source);
 
 		/**
 		 * Add the given filter to the end of the filter chain.
@@ -222,7 +241,7 @@ public interface DatabaseClient extends ConnectionAccessor {
 		 * Configure a result mapping {@link Function function} and enter the execution stage.
 		 * @param mappingFunction a function that maps from {@link Readable} to the result type
 		 * @param <R> the result type
-		 * @return a {@link FetchSpec} for configuration what to fetch
+		 * @return a {@link RowsFetchSpec} for configuration what to fetch
 		 * @since 6.0
 		 */
 		<R> RowsFetchSpec<R> map(Function<? super Readable, R> mappingFunction);
@@ -232,12 +251,33 @@ public interface DatabaseClient extends ConnectionAccessor {
 		 * @param mappingFunction a function that maps from {@link Row} and {@link RowMetadata}
 		 * to the result type
 		 * @param <R> the result type
-		 * @return a {@link FetchSpec} for configuration what to fetch
+		 * @return a {@link RowsFetchSpec} for configuration what to fetch
 		 */
 		<R> RowsFetchSpec<R> map(BiFunction<Row, RowMetadata, R> mappingFunction);
 
 		/**
-		 * Perform the SQL call and apply {@link BiFunction function} to the {@link  Result}.
+		 * Configure a mapping for values in the first column and enter the execution stage.
+		 * @param mappedClass the target class (a database-supported value class)
+		 * @param <R> the result type
+		 * @return a {@link RowsFetchSpec} for configuration what to fetch
+		 * @since 6.1
+		 * @see Readable#get(int, Class)
+		 */
+		<R> RowsFetchSpec<R> mapValue(Class<R> mappedClass);
+
+		/**
+		 * Configure a row mapper for the given mapped class and enter the execution stage.
+		 * @param mappedClass the target class (a JavaBean or record) with properties to
+		 * map to (bean properties or record components)
+		 * @param <R> the result type
+		 * @return a {@link RowsFetchSpec} for configuration what to fetch
+		 * @since 6.1
+		 * @see DataClassRowMapper
+		 */
+		<R> RowsFetchSpec<R> mapProperties(Class<R> mappedClass);
+
+		/**
+		 * Perform the SQL call and apply {@link BiFunction function} to the {@link Result}.
 		 * @param mappingFunction a function that maps from {@link Result} into a result publisher
 		 * @param <R> the result type
 		 * @return a {@link Flux} that emits mapped elements

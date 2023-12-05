@@ -366,11 +366,6 @@ public class NamedParameterJdbcTemplate implements NamedParameterJdbcOperations 
 	}
 
 	@Override
-	public int[] batchUpdate(String sql, Map<String, ?>[] batchValues) {
-		return batchUpdate(sql, SqlParameterSourceUtils.createBatch(batchValues));
-	}
-
-	@Override
 	public int[] batchUpdate(String sql, SqlParameterSource[] batchArgs) {
 		if (batchArgs.length == 0) {
 			return new int[0];
@@ -392,6 +387,49 @@ public class NamedParameterJdbcTemplate implements NamedParameterJdbcOperations 
 						return batchArgs.length;
 					}
 				});
+	}
+
+	@Override
+	public int[] batchUpdate(String sql, Map<String, ?>[] batchValues) {
+		return batchUpdate(sql, SqlParameterSourceUtils.createBatch(batchValues));
+	}
+
+	@Override
+	public int[] batchUpdate(String sql, SqlParameterSource[] batchArgs, KeyHolder generatedKeyHolder) {
+		return batchUpdate(sql, batchArgs, generatedKeyHolder, null);
+	}
+
+	@Override
+	public int[] batchUpdate(String sql, SqlParameterSource[] batchArgs, KeyHolder generatedKeyHolder,
+			@Nullable String[] keyColumnNames) {
+
+		if (batchArgs.length == 0) {
+			return new int[0];
+		}
+
+		ParsedSql parsedSql = getParsedSql(sql);
+		SqlParameterSource paramSource = batchArgs[0];
+		PreparedStatementCreatorFactory pscf = getPreparedStatementCreatorFactory(parsedSql, paramSource);
+		if (keyColumnNames != null) {
+			pscf.setGeneratedKeysColumnNames(keyColumnNames);
+		}
+		else {
+			pscf.setReturnGeneratedKeys(true);
+		}
+		Object[] params = NamedParameterUtils.buildValueArray(parsedSql, paramSource, null);
+		PreparedStatementCreator psc = pscf.newPreparedStatementCreator(params);
+		return getJdbcOperations().batchUpdate(psc, new BatchPreparedStatementSetter() {
+			@Override
+			public void setValues(PreparedStatement ps, int i) throws SQLException {
+				Object[] values = NamedParameterUtils.buildValueArray(parsedSql, batchArgs[i], null);
+				pscf.newPreparedStatementSetter(values).setValues(ps);
+			}
+
+			@Override
+			public int getBatchSize() {
+				return batchArgs.length;
+			}
+		}, generatedKeyHolder);
 	}
 
 
@@ -442,6 +480,7 @@ public class NamedParameterJdbcTemplate implements NamedParameterJdbcOperations 
 	 * @return a representation of the parsed SQL statement
 	 */
 	protected ParsedSql getParsedSql(String sql) {
+		Assert.notNull(sql, "SQL must not be null");
 		return this.parsedSqlCache.get(sql);
 	}
 

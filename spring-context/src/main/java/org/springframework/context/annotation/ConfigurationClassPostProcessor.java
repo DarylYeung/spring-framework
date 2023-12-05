@@ -58,6 +58,7 @@ import org.springframework.beans.factory.aot.BeanRegistrationAotProcessor;
 import org.springframework.beans.factory.aot.BeanRegistrationCode;
 import org.springframework.beans.factory.aot.BeanRegistrationCodeFragments;
 import org.springframework.beans.factory.aot.BeanRegistrationCodeFragmentsDecorator;
+import org.springframework.beans.factory.aot.InstanceSupplierCodeGenerator;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinitionHolder;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -90,6 +91,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.PropertySourceDescriptor;
 import org.springframework.core.io.support.PropertySourceProcessor;
+import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.core.metrics.ApplicationStartup;
 import org.springframework.core.metrics.StartupStep;
 import org.springframework.core.type.AnnotationMetadata;
@@ -315,9 +317,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		Object configClassAttr = registeredBean.getMergedBeanDefinition()
 				.getAttribute(ConfigurationClassUtils.CONFIGURATION_CLASS_ATTRIBUTE);
 		if (ConfigurationClassUtils.CONFIGURATION_CLASS_FULL.equals(configClassAttr)) {
-			Class<?> proxyClass = registeredBean.getBeanType().toClass();
 			return BeanRegistrationAotContribution.withCustomCodeFragments(codeFragments ->
-					new ConfigurationClassProxyBeanRegistrationCodeFragments(codeFragments, proxyClass));
+					new ConfigurationClassProxyBeanRegistrationCodeFragments(codeFragments, registeredBean));
 		}
 		return null;
 	}
@@ -344,8 +345,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 	@Nullable
 	private Resource resolvePropertySourceLocation(String location) {
 		try {
-			String resolvedLocation = (this.environment != null
-					? this.environment.resolveRequiredPlaceholders(location) : location);
+			String resolvedLocation = (this.environment != null ?
+					this.environment.resolveRequiredPlaceholders(location) : location);
 			return this.resourceLoader.getResource(resolvedLocation);
 		}
 		catch (Exception ex) {
@@ -506,11 +507,12 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 					throw new BeanDefinitionStoreException("Cannot enhance @Configuration bean definition '" +
 							beanName + "' since it is not stored in an AbstractBeanDefinition subclass");
 				}
-				else if (logger.isInfoEnabled() && beanFactory.containsSingleton(beanName)) {
-					logger.info("Cannot enhance @Configuration bean definition '" + beanName +
+				else if (logger.isWarnEnabled() && beanFactory.containsSingleton(beanName)) {
+					logger.warn("Cannot enhance @Configuration bean definition '" + beanName +
 							"' since its singleton instance has been created too early. The typical cause " +
 							"is a non-static @Bean method with a BeanDefinitionRegistryPostProcessor " +
-							"return type: Consider declaring such methods as 'static'.");
+							"return type: Consider declaring such methods as 'static' and/or marking the " +
+							"containing configuration class as 'proxyBeanMethods=false'.");
 				}
 				configBeanDefs.put(beanName, abd);
 			}
@@ -598,15 +600,11 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 
 			Map<String, String> mappings = buildImportAwareMappings();
 			if (!mappings.isEmpty()) {
-				GeneratedMethod generatedMethod = beanFactoryInitializationCode
-						.getMethods()
-						.add("addImportAwareBeanPostProcessors", method ->
-								generateAddPostProcessorMethod(method, mappings));
-				beanFactoryInitializationCode
-						.addInitializer(generatedMethod.toMethodReference());
+				GeneratedMethod generatedMethod = beanFactoryInitializationCode.getMethods().add(
+						"addImportAwareBeanPostProcessors", method -> generateAddPostProcessorMethod(method, mappings));
+				beanFactoryInitializationCode.addInitializer(generatedMethod.toMethodReference());
 				ResourceHints hints = generationContext.getRuntimeHints().resources();
-				mappings.forEach(
-						(target, from) -> hints.registerType(TypeReference.of(from)));
+				mappings.forEach((target, from) -> hints.registerType(TypeReference.of(from)));
 			}
 		}
 
@@ -635,8 +633,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		}
 
 		private Map<String, String> buildImportAwareMappings() {
-			ImportRegistry importRegistry = this.beanFactory
-					.getBean(IMPORT_REGISTRY_BEAN_NAME, ImportRegistry.class);
+			ImportRegistry importRegistry = this.beanFactory.getBean(IMPORT_REGISTRY_BEAN_NAME, ImportRegistry.class);
 			Map<String, String> mappings = new LinkedHashMap<>();
 			for (String name : this.beanFactory.getBeanDefinitionNames()) {
 				Class<?> beanType = this.beanFactory.getType(name);
@@ -659,6 +656,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 
 		private static final String RESOURCE_LOADER_VARIABLE = "resourceLoader";
 
+		private final Log logger = LogFactory.getLog(getClass());
+
 		private final List<PropertySourceDescriptor> descriptors;
 
 		private final Function<String, Resource> resourceResolver;
@@ -671,23 +670,35 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		@Override
 		public void applyTo(GenerationContext generationContext, BeanFactoryInitializationCode beanFactoryInitializationCode) {
 			registerRuntimeHints(generationContext.getRuntimeHints());
-			GeneratedMethod generatedMethod = beanFactoryInitializationCode
-					.getMethods()
+			GeneratedMethod generatedMethod = beanFactoryInitializationCode.getMethods()
 					.add("processPropertySources", this::generateAddPropertySourceProcessorMethod);
-			beanFactoryInitializationCode
-					.addInitializer(generatedMethod.toMethodReference());
+			beanFactoryInitializationCode.addInitializer(generatedMethod.toMethodReference());
 		}
 
 		private void registerRuntimeHints(RuntimeHints hints) {
 			for (PropertySourceDescriptor descriptor : this.descriptors) {
-				Class<?> factory = descriptor.propertySourceFactory();
-				if (factory != null) {
-					hints.reflection().registerType(factory, MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
+				Class<?> factoryClass = descriptor.propertySourceFactory();
+				if (factoryClass != null) {
+					hints.reflection().registerType(factoryClass, MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
 				}
 				for (String location : descriptor.locations()) {
-					Resource resource = this.resourceResolver.apply(location);
-					if (resource != null && resource.exists() && resource instanceof ClassPathResource classpathResource) {
-						hints.resources().registerPattern(classpathResource.getPath());
+					if (location.startsWith(ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX) ||
+							(location.startsWith(ResourcePatternResolver.CLASSPATH_URL_PREFIX) &&
+									(location.contains("*") || location.contains("?")))) {
+
+						if (logger.isWarnEnabled()) {
+							logger.warn("""
+									Runtime hint registration is not supported for the 'classpath*:' \
+									prefix or wildcards in @PropertySource locations. Please manually \
+									register a resource hint for each property source location represented \
+									by '%s'.""".formatted(location));
+						}
+					}
+					else {
+						Resource resource = this.resourceResolver.apply(location);
+						if (resource instanceof ClassPathResource classPathResource && classPathResource.exists()) {
+							hints.resources().registerPattern(classPathResource.getPath());
+						}
 					}
 				}
 			}
@@ -723,8 +734,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			code.add("new $T(", PropertySourceDescriptor.class);
 			CodeBlock values = descriptor.locations().stream()
 					.map(value -> CodeBlock.of("$S", value)).collect(CodeBlock.joining(", "));
-			if (descriptor.name() == null && descriptor.propertySourceFactory() == null
-					&& descriptor.encoding() == null && !descriptor.ignoreResourceNotFound()) {
+			if (descriptor.name() == null && descriptor.propertySourceFactory() == null &&
+					descriptor.encoding() == null && !descriptor.ignoreResourceNotFound()) {
 				code.add("$L)", values);
 			}
 			else {
@@ -755,12 +766,15 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 
 	private static class ConfigurationClassProxyBeanRegistrationCodeFragments extends BeanRegistrationCodeFragmentsDecorator {
 
+		private final RegisteredBean registeredBean;
+
 		private final Class<?> proxyClass;
 
 		public ConfigurationClassProxyBeanRegistrationCodeFragments(BeanRegistrationCodeFragments codeFragments,
-				Class<?> proxyClass) {
+				RegisteredBean registeredBean) {
 			super(codeFragments);
-			this.proxyClass = proxyClass;
+			this.registeredBean = registeredBean;
+			this.proxyClass = registeredBean.getBeanType().toClass();
 		}
 
 		@Override
@@ -776,11 +790,14 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 
 		@Override
 		public CodeBlock generateInstanceSupplierCode(GenerationContext generationContext,
-				BeanRegistrationCode beanRegistrationCode, Executable constructorOrFactoryMethod,
+				BeanRegistrationCode beanRegistrationCode,
 				boolean allowDirectSupplierShortcut) {
-			Executable executableToUse = proxyExecutable(generationContext.getRuntimeHints(), constructorOrFactoryMethod);
-			return super.generateInstanceSupplierCode(generationContext, beanRegistrationCode,
-					executableToUse, allowDirectSupplierShortcut);
+
+			Executable executableToUse = proxyExecutable(generationContext.getRuntimeHints(),
+					this.registeredBean.resolveConstructorOrFactoryMethod());
+			return new InstanceSupplierCodeGenerator(generationContext,
+					beanRegistrationCode.getClassName(), beanRegistrationCode.getMethods(), allowDirectSupplierShortcut)
+					.generateCode(this.registeredBean, executableToUse);
 		}
 
 		private Executable proxyExecutable(RuntimeHints runtimeHints, Executable userExecutable) {

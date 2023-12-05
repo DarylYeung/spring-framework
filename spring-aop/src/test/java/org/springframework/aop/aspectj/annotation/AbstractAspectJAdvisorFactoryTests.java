@@ -38,12 +38,7 @@ import org.aspectj.lang.annotation.DeclareParents;
 import org.aspectj.lang.annotation.DeclarePrecedence;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import test.aop.DefaultLockable;
-import test.aop.Lockable;
-import test.aop.PerTargetAspect;
-import test.aop.TwoAdviceAspect;
 
 import org.springframework.aop.Advisor;
 import org.springframework.aop.framework.Advised;
@@ -51,6 +46,10 @@ import org.springframework.aop.framework.AopConfigException;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.aop.interceptor.ExposeInvocationInterceptor;
 import org.springframework.aop.support.AopUtils;
+import org.springframework.aop.testfixture.aspectj.PerTargetAspect;
+import org.springframework.aop.testfixture.aspectj.TwoAdviceAspect;
+import org.springframework.aop.testfixture.mixin.DefaultLockable;
+import org.springframework.aop.testfixture.mixin.Lockable;
 import org.springframework.beans.testfixture.beans.ITestBean;
 import org.springframework.beans.testfixture.beans.TestBean;
 import org.springframework.core.OrderComparator;
@@ -127,7 +126,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 	}
 
 	@Test
-	void multiplePerTargetAspects() throws Exception {
+	void multiplePerTargetAspects() {
 		TestBean target = new TestBean();
 		int realAge = 65;
 		target.setAge(realAge);
@@ -153,7 +152,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 	}
 
 	@Test
-	void multiplePerTargetAspectsWithOrderAnnotation() throws Exception {
+	void multiplePerTargetAspectsWithOrderAnnotation() {
 		TestBean target = new TestBean();
 		int realAge = 65;
 		target.setAge(realAge);
@@ -283,7 +282,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 		int realAge = 65;
 		target.setAge(realAge);
 		ITestBean itb = createProxy(target, ITestBean.class,
-			getAdvisorFactory().getAdvisors(aspectInstanceFactory(aspectInstance, "someBean")));
+				getAdvisorFactory().getAdvisors(aspectInstanceFactory(aspectInstance, "someBean")));
 		assertThat(itb.getAge()).as("Around advice must apply").isEqualTo(-1);
 		assertThat(target.getAge()).isEqualTo(realAge);
 	}
@@ -292,7 +291,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 	void bindingWithSingleArg() {
 		TestBean target = new TestBean();
 		ITestBean itb = createProxy(target, ITestBean.class,
-			getAdvisorFactory().getAdvisors(aspectInstanceFactory(new BindingAspectWithSingleArg(), "someBean")));
+				getAdvisorFactory().getAdvisors(aspectInstanceFactory(new BindingAspectWithSingleArg(), "someBean")));
 		itb.setAge(10);
 		assertThat(itb.getAge()).as("Around advice must apply").isEqualTo(20);
 		assertThat(target.getAge()).isEqualTo(20);
@@ -389,9 +388,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 		assertThat(lockable.locked()).isTrue();
 	}
 
-	// TODO: Why does this test fail? It hasn't been run before, so it maybe never actually passed...
 	@Test
-	@Disabled
 	void introductionWithArgumentBinding() {
 		TestBean target = new TestBean();
 
@@ -459,10 +456,10 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 		assertThat(advisors).as("Two advice methods found").hasSize(2);
 		ITestBean itb = createProxy(target, ITestBean.class, advisors);
 		itb.setName("");
-		assertThat(itb.getAge()).isEqualTo(0);
+		assertThat(itb.age()).isEqualTo(0);
 		int newAge = 32;
 		itb.setAge(newAge);
-		assertThat(itb.getAge()).isEqualTo(1);
+		assertThat(itb.age()).isEqualTo(1);
 	}
 
 	@Test
@@ -483,7 +480,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 	}
 
 	@Test
-	void nonAbstractParentAspect() throws Exception {
+	void nonAbstractParentAspect() {
 		IncrementingAspect aspect = new IncrementingAspect();
 
 		// Precondition:
@@ -689,7 +686,7 @@ abstract class AbstractAspectJAdvisorFactoryTests {
 	@Aspect
 	static class Library {
 
-		@Pointcut("execution(!void get*())")
+		@Pointcut("execution(int get*())")  // before AspectJ 1.9.20, "!void" used to work instead of "int"
 		void propertyAccess() {}
 
 		@Pointcut("execution(* *(..)) && args(i)")

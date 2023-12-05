@@ -16,6 +16,12 @@
 
 package org.springframework.jms.listener;
 
+import io.micrometer.jakarta9.instrument.jms.DefaultJmsProcessObservationConvention;
+import io.micrometer.jakarta9.instrument.jms.JmsObservationDocumentation;
+import io.micrometer.jakarta9.instrument.jms.JmsProcessObservationContext;
+import io.micrometer.jakarta9.instrument.jms.JmsProcessObservationConvention;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import jakarta.jms.Connection;
 import jakarta.jms.Destination;
 import jakarta.jms.ExceptionListener;
@@ -31,6 +37,7 @@ import org.springframework.jms.support.JmsUtils;
 import org.springframework.jms.support.QosSettings;
 import org.springframework.jms.support.converter.MessageConverter;
 import org.springframework.lang.Nullable;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.ErrorHandler;
 
 /**
@@ -130,6 +137,7 @@ import org.springframework.util.ErrorHandler;
  *
  * @author Juergen Hoeller
  * @author Stephane Nicoll
+ * @author Brian Clozel
  * @since 2.0
  * @see #setMessageListener
  * @see jakarta.jms.MessageListener
@@ -141,6 +149,9 @@ import org.springframework.util.ErrorHandler;
  */
 public abstract class AbstractMessageListenerContainer extends AbstractJmsListeningContainer
 		implements MessageListenerContainer {
+
+	private static final boolean micrometerJakartaPresent = ClassUtils.isPresent(
+			"io.micrometer.jakarta9.instrument.jms.JmsInstrumentation", AbstractMessageListenerContainer.class.getClassLoader());
 
 	@Nullable
 	private volatile Object destination;
@@ -174,6 +185,9 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 
 	@Nullable
 	private ErrorHandler errorHandler;
+
+	@Nullable
+	private ObservationRegistry observationRegistry;
 
 	private boolean exposeListenerSession = true;
 
@@ -562,6 +576,26 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	}
 
 	/**
+	 * Set the {@link ObservationRegistry} to be used for recording
+	 * {@link JmsObservationDocumentation#JMS_MESSAGE_PROCESS JMS message processing observations}.
+	 * Defaults to no-op observations if the registry is not set.
+	 * @since 6.1
+	 */
+	public void setObservationRegistry(@Nullable ObservationRegistry observationRegistry) {
+		this.observationRegistry = observationRegistry;
+	}
+
+	/**
+	 * Return the {@link ObservationRegistry} used for recording
+	 * {@link JmsObservationDocumentation#JMS_MESSAGE_PROCESS JMS message processing observations}.
+	 * @since 6.1
+	 */
+	@Nullable
+	public ObservationRegistry getObservationRegistry() {
+		return this.observationRegistry;
+	}
+
+	/**
 	 * Set whether to expose the listener JMS Session to a registered
 	 * {@link SessionAwareMessageListener} as well as to
 	 * {@link org.springframework.jms.core.JmsTemplate} calls.
@@ -641,11 +675,22 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 * @see #handleListenerException
 	 */
 	protected void executeListener(Session session, Message message) {
-		try {
-			doExecuteListener(session, message);
+		createObservation(message).observe(() -> {
+			try {
+				doExecuteListener(session, message);
+			}
+			catch (Throwable ex) {
+				handleListenerException(ex);
+			}
+		});
+	}
+
+	protected Observation createObservation(Message message) {
+		if (micrometerJakartaPresent && this.observationRegistry != null) {
+			return ObservationFactory.create(this.observationRegistry, message);
 		}
-		catch (Throwable ex) {
-			handleListenerException(ex);
+		else {
+			return Observation.NOOP;
 		}
 	}
 
@@ -724,6 +769,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 
 		Connection conToClose = null;
 		Session sessionToClose = null;
+		Observation observation = createObservation(message);
 		try {
 			Session sessionToUse = session;
 			if (!isExposeListenerSession()) {
@@ -732,6 +778,7 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 				sessionToClose = createSession(conToClose);
 				sessionToUse = sessionToClose;
 			}
+			observation.start();
 			// Actually invoke the message listener...
 			listener.onMessage(message, sessionToUse);
 			// Clean up specially exposed Session, if any.
@@ -742,7 +789,12 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 				}
 			}
 		}
+		catch (JMSException exc) {
+			observation.error(exc);
+			throw exc;
+		}
 		finally {
+			observation.stop();
 			JmsUtils.closeSession(sessionToClose);
 			JmsUtils.closeConnection(conToClose);
 		}
@@ -938,6 +990,16 @@ public abstract class AbstractMessageListenerContainer extends AbstractJmsListen
 	 */
 	@SuppressWarnings("serial")
 	private static class MessageRejectedWhileStoppingException extends RuntimeException {
+	}
+
+	private abstract static class ObservationFactory {
+
+		private static final JmsProcessObservationConvention DEFAULT_CONVENTION = new DefaultJmsProcessObservationConvention();
+
+		static Observation create(ObservationRegistry registry, Message message) {
+			return JmsObservationDocumentation.JMS_MESSAGE_PROCESS
+					.observation(null, DEFAULT_CONVENTION, () -> new JmsProcessObservationContext(message), registry);
+		}
 	}
 
 }

@@ -24,10 +24,8 @@ import org.junit.jupiter.api.Test
 import org.springframework.core.ReactiveAdapterRegistry
 import org.springframework.http.HttpStatus
 import org.springframework.http.server.reactive.ServerHttpResponse
-import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
-import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.reactive.BindingContext
 import org.springframework.web.reactive.HandlerResult
 import org.springframework.web.reactive.result.method.HandlerMethodArgumentResolver
@@ -166,6 +164,20 @@ class InvocableHandlerMethodKotlinTests {
 		assertHandlerResultValue(result, "override")
 	}
 
+	@Test
+	fun unitReturnValue() {
+		val method = NullResultController::unit.javaMethod!!
+		val result = invoke(NullResultController(), method)
+		assertHandlerResultValue(result, null)
+	}
+
+	@Test
+	fun nullReturnValue() {
+		val method = NullResultController::nullable.javaMethod!!
+		val result = invoke(NullResultController(), method)
+		assertHandlerResultValue(result, null)
+	}
+
 
 	private fun invokeForResult(handler: Any, method: Method, vararg providedArgs: Any): HandlerResult? {
 		return invoke(handler, method, *providedArgs).block(Duration.ofSeconds(5))
@@ -188,7 +200,7 @@ class InvocableHandlerMethodKotlinTests {
 		return resolver
 	}
 
-	private fun assertHandlerResultValue(mono: Mono<HandlerResult>, expected: String) {
+	private fun assertHandlerResultValue(mono: Mono<HandlerResult>, expected: String?) {
 		StepVerifier.create(mono)
 				.consumeNextWith {
 					if (it.returnValue is Mono<*>) {
@@ -235,7 +247,6 @@ class InvocableHandlerMethodKotlinTests {
 		}
 	}
 
-	@RestController
 	class DefaultValueController {
 
 		fun handle(@RequestParam value: String = "default") = value
@@ -244,6 +255,15 @@ class InvocableHandlerMethodKotlinTests {
 
 		@Suppress("RedundantSuspendModifier")
 		suspend fun handleSuspending(@RequestParam value: String = "default") = value
+	}
 
+	class NullResultController {
+
+		fun unit() {
+		}
+
+		fun nullable(): String? {
+			return null
+		}
 	}
 }

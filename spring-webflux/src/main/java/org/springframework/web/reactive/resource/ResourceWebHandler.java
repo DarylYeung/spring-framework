@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -41,7 +42,6 @@ import org.springframework.core.log.LogFormatUtils;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.codec.ResourceHttpMessageWriter;
@@ -54,7 +54,6 @@ import org.springframework.util.ResourceUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.server.MethodNotAllowedException;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebHandler;
 import org.springframework.web.util.pattern.PathPattern;
@@ -124,6 +123,9 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 	private Map<String, MediaType> mediaTypes;
 
 	private boolean useLastModified = true;
+
+	@Nullable
+	private Function<Resource, String> etagGenerator;
 
 	private boolean optimizeLocations = false;
 
@@ -278,6 +280,29 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 	}
 
 	/**
+	 * Configure a generator function that will be used to create the ETag information,
+	 * given a {@link Resource} that is about to be written to the response.
+	 * <p>This function should return a String that will be used as an argument in
+	 * {@link ServerWebExchange#checkNotModified(String)}, or {@code null} if no value
+	 * can be generated for the given resource.
+	 * @param etagGenerator the HTTP ETag generator function to use.
+	 * @since 6.1
+	 */
+	public void setEtagGenerator(@Nullable Function<Resource, String> etagGenerator) {
+		this.etagGenerator = etagGenerator;
+	}
+
+	/**
+	 * Return the HTTP ETag generator function to be used when serving resources.
+	 * @return the HTTP ETag generator function
+	 * @since 6.1
+	 */
+	@Nullable
+	public Function<Resource, String> getEtagGenerator() {
+		return this.etagGenerator;
+	}
+
+	/**
 	 * Set whether to optimize the specified locations through an existence
 	 * check on startup, filtering non-existing directories upfront so that
 	 * they do not have to be checked on every resource access.
@@ -403,7 +428,7 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 		return getResource(exchange)
 				.switchIfEmpty(Mono.defer(() -> {
 					logger.debug(exchange.getLogPrefix() + "Resource not found");
-					return Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND));
+					return Mono.error(new NoResourceFoundException(getResourcePath(exchange)));
 				}))
 				.flatMap(resource -> {
 					try {
@@ -420,7 +445,9 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 						}
 
 						// Header phase
-						if (isUseLastModified() && exchange.checkNotModified(Instant.ofEpochMilli(resource.lastModified()))) {
+						String eTagValue = (this.getEtagGenerator() != null) ? this.getEtagGenerator().apply(resource) : null;
+						Instant lastModified = isUseLastModified() ? Instant.ofEpochMilli(resource.lastModified()) : Instant.MIN;
+						if (exchange.checkNotModified(eTagValue, lastModified)) {
 							logger.trace(exchange.getLogPrefix() + "Resource not modified");
 							return Mono.empty();
 						}
@@ -439,9 +466,9 @@ public class ResourceWebHandler implements WebHandler, InitializingBean {
 						ResourceHttpMessageWriter writer = getResourceHttpMessageWriter();
 						Assert.state(writer != null, "No ResourceHttpMessageWriter");
 						if (HttpMethod.HEAD == httpMethod) {
-							writer.addHeaders(exchange.getResponse(), resource, mediaType,
-									Hints.from(Hints.LOG_PREFIX_HINT, exchange.getLogPrefix()));
-							return exchange.getResponse().setComplete();
+							return writer.addDefaultHeaders(exchange.getResponse(), resource, mediaType,
+											Hints.from(Hints.LOG_PREFIX_HINT, exchange.getLogPrefix()))
+									.then(exchange.getResponse().setComplete());
 						}
 						else {
 							return writer.write(Mono.just(resource),

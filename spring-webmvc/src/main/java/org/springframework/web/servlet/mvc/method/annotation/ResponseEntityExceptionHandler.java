@@ -50,6 +50,7 @@ import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -128,6 +129,7 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 			NoResourceFoundException.class,
 			AsyncRequestTimeoutException.class,
 			ErrorResponseException.class,
+			MaxUploadSizeExceededException.class,
 			ConversionNotSupportedException.class,
 			TypeMismatchException.class,
 			HttpMessageNotReadableException.class,
@@ -175,6 +177,9 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 		}
 		else if (ex instanceof ErrorResponseException subEx) {
 			return handleErrorResponseException(subEx, subEx.getHeaders(), subEx.getStatusCode(), request);
+		}
+		else if (ex instanceof MaxUploadSizeExceededException subEx) {
+			return handleMaxUploadSizeExceededException(subEx, subEx.getHeaders(), subEx.getStatusCode(), request);
 		}
 
 		// Lower level exceptions, and exceptions used symmetrically on client and server
@@ -436,6 +441,24 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 	}
 
 	/**
+	 * Customize the handling of any {@link MaxUploadSizeExceededException}.
+	 * <p>This method delegates to {@link #handleExceptionInternal}.
+	 * @param ex the exception to handle
+	 * @param headers the headers to use for the response
+	 * @param status the status code to use for the response
+	 * @param request the current request
+	 * @return a {@code ResponseEntity} for the response to use, possibly
+	 * {@code null} when the response is already committed
+	 * @since 6.1
+	 */
+	@Nullable
+	protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+			MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+
+		return handleExceptionInternal(ex, null, headers, status, request);
+	}
+
+	/**
 	 * Customize the handling of {@link ConversionNotSupportedException}.
 	 * <p>By default this method creates a {@link ProblemDetail} with the status
 	 * and a short detail message, and also looks up an override for the detail
@@ -580,8 +603,9 @@ public abstract class ResponseEntityExceptionHandler implements MessageSourceAwa
 	 * @param status the status to associate with the exception
 	 * @param defaultDetail default value for the "detail" field
 	 * @param detailMessageCode the code to use to look up the "detail" field
-	 * through a {@code MessageSource}, falling back on
-	 * {@link ErrorResponse#getDefaultDetailMessageCode(Class, String)}
+	 * through a {@code MessageSource}; if {@code null} then
+	 * {@link ErrorResponse#getDefaultDetailMessageCode(Class, String)} is used
+	 * to determine the default message code to use
 	 * @param detailMessageArguments the arguments to go with the detailMessageCode
 	 * @param request the current request
 	 * @return the created {@code ProblemDetail} instance

@@ -162,6 +162,10 @@ public final class WebHttpHandlerBuilder {
 	 * ordered.
 	 * <li>{@link HttpHandlerDecoratorFactory} [0..N] -- detected by type and
 	 * ordered.
+	 * <li>{@link ObservationRegistry} -- detected by type and
+	 * configured if unique.
+	 * <li>{@link ServerRequestObservationConvention} -- detected by type and
+	 * configured if unique.
 	 * <li>{@link WebSessionManager} [0..1] -- looked up by the name
 	 * {@link #WEB_SESSION_MANAGER_BEAN_NAME}.
 	 * <li>{@link ServerCodecConfigurer} [0..1] -- looked up by the name
@@ -192,6 +196,9 @@ public final class WebHttpHandlerBuilder {
 		context.getBeanProvider(HttpHandlerDecoratorFactory.class)
 				.orderedStream()
 				.forEach(builder::httpHandlerDecorator);
+
+		context.getBeanProvider(ObservationRegistry.class).ifUnique(builder::observationRegistry);
+		context.getBeanProvider(ServerRequestObservationConvention.class).ifUnique(builder::observationConvention);
 
 		try {
 			builder.sessionManager(
@@ -422,7 +429,7 @@ public final class WebHttpHandlerBuilder {
 	 */
 	public HttpHandler build() {
 		WebHandler decorated = new FilteringWebHandler(this.webHandler, this.filters);
-		decorated = new ExceptionHandlingWebHandler(decorated,  this.exceptionHandlers);
+		decorated = new ExceptionHandlingWebHandler(decorated, this.exceptionHandlers);
 
 		HttpWebHandlerAdapter adapted = new HttpWebHandlerAdapter(decorated);
 		if (this.sessionManager != null) {

@@ -79,9 +79,11 @@ import org.springframework.beans.testfixture.beans.TestBean;
 import org.springframework.beans.testfixture.beans.factory.DummyFactory;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.Ordered;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.support.DefaultConversionService;
 import org.springframework.core.convert.support.GenericConversionService;
 import org.springframework.core.io.Resource;
@@ -1161,7 +1163,7 @@ class DefaultListableBeanFactoryTests {
 		assertThat(lbf.getBean("singletonObject")).isEqualTo(singletonObject);
 		assertThat(test.getSpouse()).isEqualTo(singletonObject);
 
-		Map<?, ?>  beansOfType = lbf.getBeansOfType(TestBean.class, false, true);
+		Map<?, ?> beansOfType = lbf.getBeansOfType(TestBean.class, false, true);
 		assertThat(beansOfType).hasSize(2);
 		assertThat(beansOfType.containsValue(test)).isTrue();
 		assertThat(beansOfType.containsValue(singletonObject)).isTrue();
@@ -1482,6 +1484,55 @@ class DefaultListableBeanFactoryTests {
 		Object spouse = lbf.getBean("spouse1");
 		assertThat(bean.getSpouse1()).isSameAs(spouse);
 		assertThat(bean.getSpouse2()).isNull();
+	}
+
+	@Test
+	void orderFromAttribute() {
+		GenericBeanDefinition bd1 = new GenericBeanDefinition();
+		bd1.setBeanClass(TestBean.class);
+		bd1.setPropertyValues(new MutablePropertyValues(List.of(new PropertyValue("name", "lowest"))));
+		bd1.setAttribute(AbstractBeanDefinition.ORDER_ATTRIBUTE, Ordered.LOWEST_PRECEDENCE);
+		lbf.registerBeanDefinition("bean1", bd1);
+		GenericBeanDefinition bd2 = new GenericBeanDefinition();
+		bd2.setBeanClass(TestBean.class);
+		bd2.setPropertyValues(new MutablePropertyValues(List.of(new PropertyValue("name", "highest"))));
+		bd2.setAttribute(AbstractBeanDefinition.ORDER_ATTRIBUTE, Ordered.HIGHEST_PRECEDENCE);
+		lbf.registerBeanDefinition("bean2", bd2);
+		assertThat(lbf.getBeanProvider(TestBean.class).orderedStream().map(TestBean::getName))
+				.containsExactly("highest", "lowest");
+	}
+
+	@Test
+	void orderFromAttributeOverrideAnnotation() {
+		lbf.setDependencyComparator(AnnotationAwareOrderComparator.INSTANCE);
+		RootBeanDefinition rbd1 = new RootBeanDefinition(LowestPrecedenceTestBeanFactoryBean.class);
+		rbd1.setAttribute(AbstractBeanDefinition.ORDER_ATTRIBUTE, Ordered.HIGHEST_PRECEDENCE);
+		lbf.registerBeanDefinition("lowestPrecedenceFactory", rbd1);
+		RootBeanDefinition rbd2 = new RootBeanDefinition(HighestPrecedenceTestBeanFactoryBean.class);
+		rbd2.setAttribute(AbstractBeanDefinition.ORDER_ATTRIBUTE, Ordered.LOWEST_PRECEDENCE);
+		lbf.registerBeanDefinition("highestPrecedenceFactory", rbd2);
+		GenericBeanDefinition bd1 = new GenericBeanDefinition();
+		bd1.setFactoryBeanName("highestPrecedenceFactory");
+		lbf.registerBeanDefinition("bean1", bd1);
+		GenericBeanDefinition bd2 = new GenericBeanDefinition();
+		bd2.setFactoryBeanName("lowestPrecedenceFactory");
+		lbf.registerBeanDefinition("bean2", bd2);
+		assertThat(lbf.getBeanProvider(TestBean.class).orderedStream().map(TestBean::getName))
+				.containsExactly("fromLowestPrecedenceTestBeanFactoryBean", "fromHighestPrecedenceTestBeanFactoryBean");
+	}
+
+	@Test
+	void invalidOrderAttribute() {
+		GenericBeanDefinition bd1 = new GenericBeanDefinition();
+		bd1.setBeanClass(TestBean.class);
+		bd1.setAttribute(AbstractBeanDefinition.ORDER_ATTRIBUTE, Boolean.TRUE);
+		lbf.registerBeanDefinition("bean1", bd1);
+		GenericBeanDefinition bd2 = new GenericBeanDefinition();
+		bd2.setBeanClass(TestBean.class);
+		lbf.registerBeanDefinition("bean", bd2);
+		assertThatIllegalStateException()
+				.isThrownBy(() -> lbf.getBeanProvider(TestBean.class).orderedStream().collect(Collectors.toList()))
+				.withMessageContaining("Invalid value type for attribute");
 	}
 
 	@Test
@@ -2032,6 +2083,16 @@ class DefaultListableBeanFactoryTests {
 		assertBeanNamesForType(FactoryBean.class, false, false);
 	}
 
+	@Test  // gh-30987
+	void getBeanNamesForTypeWithFactoryBeanDefinedAsTargetType() {
+		RootBeanDefinition beanDefinition = new RootBeanDefinition(TestRepositoryFactoryBean.class);
+		beanDefinition.setTargetType(ResolvableType.forClassWithGenerics(TestRepositoryFactoryBean.class,
+				CityRepository.class, Object.class, Object.class));
+		lbf.registerBeanDefinition("factoryBean", beanDefinition);
+		assertBeanNamesForType(TestRepositoryFactoryBean.class, true, false, "&factoryBean");
+		assertBeanNamesForType(CityRepository.class, true, false, "factoryBean");
+	}
+
 	/**
 	 * Verifies that a dependency on a {@link FactoryBean} can <strong>not</strong>
 	 * be autowired <em>by name</em>, as &amp; is an illegal character in
@@ -2144,7 +2205,7 @@ class DefaultListableBeanFactoryTests {
 	}
 
 	@Test
-	void beanProviderWithParentBeanFactoryReuseOrder() {
+	void beanProviderWithParentBeanFactoryDetectsOrder() {
 		DefaultListableBeanFactory parentBf = new DefaultListableBeanFactory();
 		parentBf.setDependencyComparator(AnnotationAwareOrderComparator.INSTANCE);
 		parentBf.registerBeanDefinition("regular", new RootBeanDefinition(TestBean.class));
@@ -2152,8 +2213,34 @@ class DefaultListableBeanFactoryTests {
 		lbf.setDependencyComparator(AnnotationAwareOrderComparator.INSTANCE);
 		lbf.setParentBeanFactory(parentBf);
 		lbf.registerBeanDefinition("low", new RootBeanDefinition(LowPriorityTestBean.class));
+
 		Stream<Class<?>> orderedTypes = lbf.getBeanProvider(TestBean.class).orderedStream().map(Object::getClass);
 		assertThat(orderedTypes).containsExactly(HighPriorityTestBean.class, LowPriorityTestBean.class, TestBean.class);
+	}
+
+	@Test  // gh-28374
+	void beanProviderWithParentBeanFactoryAndMixedOrder() {
+		DefaultListableBeanFactory parentBf = new DefaultListableBeanFactory();
+		parentBf.setDependencyComparator(AnnotationAwareOrderComparator.INSTANCE);
+		lbf.setDependencyComparator(AnnotationAwareOrderComparator.INSTANCE);
+		lbf.setParentBeanFactory(parentBf);
+
+		lbf.registerSingleton("plainTestBean", new TestBean());
+
+		RootBeanDefinition bd1 = new RootBeanDefinition(PriorityTestBeanFactory.class);
+		bd1.setFactoryMethodName("lowPriorityTestBean");
+		lbf.registerBeanDefinition("lowPriorityTestBean", bd1);
+
+		RootBeanDefinition bd2 = new RootBeanDefinition(PriorityTestBeanFactory.class);
+		bd2.setFactoryMethodName("highPriorityTestBean");
+		parentBf.registerBeanDefinition("highPriorityTestBean", bd2);
+
+		ObjectProvider<TestBean> testBeanProvider = lbf.getBeanProvider(ResolvableType.forClass(TestBean.class));
+		List<TestBean> resolved = testBeanProvider.orderedStream().toList();
+		assertThat(resolved.size()).isEqualTo(3);
+		assertThat(resolved.get(0)).isSameAs(lbf.getBean("highPriorityTestBean"));
+		assertThat(resolved.get(1)).isSameAs(lbf.getBean("lowPriorityTestBean"));
+		assertThat(resolved.get(2)).isSameAs(lbf.getBean("plainTestBean"));
 	}
 
 	@Test
@@ -3020,7 +3107,7 @@ class DefaultListableBeanFactoryTests {
 	}
 
 
-	public static abstract class BaseClassWithDestroyMethod {
+	public abstract static class BaseClassWithDestroyMethod {
 
 		public abstract BaseClassWithDestroyMethod close();
 	}
@@ -3079,7 +3166,7 @@ class DefaultListableBeanFactoryTests {
 	}
 
 
-	public static abstract class RepositoryFactoryBeanSupport<T extends Repository<S, ID>, S, ID extends Serializable>
+	public abstract static class RepositoryFactoryBeanSupport<T extends Repository<S, ID>, S, ID extends Serializable>
 			implements RepositoryFactoryInformation<S, ID>, FactoryBean<T> {
 	}
 
@@ -3118,6 +3205,25 @@ class DefaultListableBeanFactoryTests {
 			throw new IllegalStateException();
 		}
 	}
+
+
+	public static class TestRepositoryFactoryBean<T extends Repository<S, ID>, S, ID extends Serializable>
+			extends RepositoryFactoryBeanSupport<T, S, ID> {
+
+		@Override
+		public T getObject() throws Exception {
+			throw new IllegalArgumentException("Should not be called");
+		}
+
+		@Override
+		public Class<?> getObjectType() {
+			throw new IllegalArgumentException("Should not be called");
+		}
+	}
+
+	public record City(String name) {}
+
+	public static class CityRepository implements Repository<City, Long> {}
 
 
 	public static class LazyInitFactory implements FactoryBean<Object> {
@@ -3310,6 +3416,18 @@ class DefaultListableBeanFactoryTests {
 	}
 
 
+	private static class PriorityTestBeanFactory {
+
+		public static LowPriorityTestBean lowPriorityTestBean() {
+			return new LowPriorityTestBean();
+		}
+
+		public static HighPriorityTestBean highPriorityTestBean() {
+			return new HighPriorityTestBean();
+		}
+	}
+
+
 	private static class NullTestBeanFactoryBean<T> implements FactoryBean<TestBean> {
 
 		@Override
@@ -3357,6 +3475,36 @@ class DefaultListableBeanFactoryTests {
 		public NonPublicEnum getNonPublicEnum() {
 			return nonPublicEnum;
 		}
+	}
+
+	@Order
+	private static class LowestPrecedenceTestBeanFactoryBean implements FactoryBean<TestBean> {
+
+		@Override
+		public TestBean getObject() {
+			return new TestBean("fromLowestPrecedenceTestBeanFactoryBean");
+		}
+
+		@Override
+		public Class<?> getObjectType() {
+			return TestBean.class;
+		}
+
+	}
+
+	@Order(Ordered.HIGHEST_PRECEDENCE)
+	private static class HighestPrecedenceTestBeanFactoryBean implements FactoryBean<TestBean> {
+
+		@Override
+		public TestBean getObject() {
+			return new TestBean("fromHighestPrecedenceTestBeanFactoryBean");
+		}
+
+		@Override
+		public Class<?> getObjectType() {
+			return TestBean.class;
+		}
+
 	}
 
 }

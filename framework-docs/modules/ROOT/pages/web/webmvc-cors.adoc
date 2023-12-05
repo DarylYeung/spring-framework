@@ -25,6 +25,35 @@ powerful workarounds based on IFRAME or JSONP.
 
 
 
+[[mvc-cors-credentialed-requests]]
+== Credentialed Requests
+[.small]#xref:web/webflux-cors.adoc#webflux-cors-credentialed-requests[See equivalent in the Reactive stack]#
+
+Using CORS with credentialed requests requires enabling `allowedCredentials`. Be aware that
+this option establishes a high level of trust with the configured domains and also increases
+the surface of attack of the web application by exposing sensitive user-specific information
+such as cookies and CSRF tokens.
+
+Enabling credentials also impacts how the configured `"*"` CORS wildcards are processed:
+
+* Wildcards are not authorized in `allowOrigins`, but alternatively
+the `allowOriginPatterns` property may be used to match to a dynamic set of origins.
+* When set on `allowedHeaders` or `allowedMethods`, the `Access-Control-Allow-Headers`
+and `Access-Control-Allow-Methods` response headers are handled by copying the related
+headers and method specified in the CORS preflight request.
+* When set on `exposedHeaders`, `Access-Control-Expose-Headers` response header is set
+either to the configured list of headers or to the wildcard character. While the CORS spec
+does not allow the wildcard character when `Access-Control-Allow-Credentials` is set to
+`true`, most browsers support it and the response headers are not all available during the
+CORS processing, so as a consequence the wildcard character is the header value used when
+specified regardless of the value of the `allowCredentials` property.
+
+WARNING: While such wildcard configuration can be handy, it is recommended when possible to configure
+a finite set of values instead to provide a higher level of security.
+
+
+
+
 [[mvc-cors-processing]]
 == Processing
 [.small]#xref:web/webflux-cors.adoc#webflux-cors-processing[See equivalent in the Reactive stack]#
@@ -47,7 +76,7 @@ rejected. No CORS headers are added to the responses of simple and actual CORS r
 and, consequently, browsers reject them.
 
 Each `HandlerMapping` can be
-{api-spring-framework}/web/servlet/handler/AbstractHandlerMapping.html#setCorsConfigurations-java.util.Map-[configured]
+{spring-framework-api}/web/servlet/handler/AbstractHandlerMapping.html#setCorsConfigurations-java.util.Map-[configured]
 individually with URL pattern-based `CorsConfiguration` mappings. In most cases, applications
 use the MVC Java configuration or the XML namespace to declare such mappings, which results
 in a single global map being passed to all `HandlerMapping` instances.
@@ -60,7 +89,7 @@ class- or method-level `@CrossOrigin` annotations (other handlers can implement
 The rules for combining global and local configuration are generally additive -- for example,
 all global and all local origins. For those attributes where only a single value can be
 accepted, e.g. `allowCredentials` and `maxAge`, the local overrides the global value. See
-{api-spring-framework}/web/cors/CorsConfiguration.html#combine-org.springframework.web.cors.CorsConfiguration-[`CorsConfiguration#combine(CorsConfiguration)`]
+{spring-framework-api}/web/cors/CorsConfiguration.html#combine-org.springframework.web.cors.CorsConfiguration-[`CorsConfiguration#combine(CorsConfiguration)`]
 for more details.
 
 [TIP]
@@ -79,7 +108,7 @@ To learn more from the source or make advanced customizations, check the code be
 == `@CrossOrigin`
 [.small]#xref:web/webflux-cors.adoc#webflux-cors-controller[See equivalent in the Reactive stack]#
 
-The {api-spring-framework}/web/bind/annotation/CrossOrigin.html[`@CrossOrigin`]
+The {spring-framework-api}/web/bind/annotation/CrossOrigin.html[`@CrossOrigin`]
 annotation enables cross-origin requests on annotated controller methods,
 as the following example shows:
 
@@ -356,7 +385,7 @@ as the following example shows:
 [.small]#xref:web/webflux-cors.adoc#webflux-cors-webfilter[See equivalent in the Reactive stack]#
 
 You can apply CORS support through the built-in
-{api-spring-framework}/web/filter/CorsFilter.html[`CorsFilter`].
+{spring-framework-api}/web/filter/CorsFilter.html[`CorsFilter`].
 
 NOTE: If you try to use the `CorsFilter` with Spring Security, keep in mind that Spring
 Security has {docs-spring-security}/servlet/integrations/cors.html[built-in support] for

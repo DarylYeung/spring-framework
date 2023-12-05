@@ -47,7 +47,6 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 	private static final long serialVersionUID = -8697084563854098920L;
 
-	@SuppressWarnings("serial")
 	private final MultiValueMap<K, V> delegate;
 
 	@Nullable
@@ -65,6 +64,7 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 		Assert.notNull(delegate, "Delegate must not be null");
 		this.delegate = (MultiValueMap<K, V>) delegate;
 	}
+
 
 	// delegation
 
@@ -92,7 +92,7 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 	@Nullable
 	public List<V> get(Object key) {
 		List<V> result = this.delegate.get(key);
-		return result != null ? Collections.unmodifiableList(result) : null;
+		return (result != null ? Collections.unmodifiableList(result) : null);
 	}
 
 	@Override
@@ -119,20 +119,22 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 		return this.delegate.toSingleValueMap();
 	}
 
+
+	@Override
+	public boolean equals(@Nullable Object other) {
+		return (this == other || this.delegate.equals(other));
+	}
+
 	@Override
 	public int hashCode() {
 		return this.delegate.hashCode();
 	}
 
 	@Override
-	public boolean equals(@Nullable Object obj) {
-		return this == obj || this.delegate.equals(obj);
-	}
-
-	@Override
 	public String toString() {
 		return this.delegate.toString();
 	}
+
 
 	// lazy init
 
@@ -239,20 +241,17 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 	}
 
 	@Override
-	public List<V> computeIfPresent(K key,
-			BiFunction<? super K, ? super List<V>, ? extends List<V>> remappingFunction) {
+	public List<V> computeIfPresent(K key, BiFunction<? super K, ? super List<V>, ? extends List<V>> remappingFunction) {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public List<V> compute(K key,
-			BiFunction<? super K, ? super List<V>, ? extends List<V>> remappingFunction) {
+	public List<V> compute(K key, BiFunction<? super K, ? super List<V>, ? extends List<V>> remappingFunction) {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public List<V> merge(K key, List<V> value,
-			BiFunction<? super List<V>, ? super List<V>, ? extends List<V>> remappingFunction) {
+	public List<V> merge(K key, List<V> value, BiFunction<? super List<V>, ? super List<V>, ? extends List<V>> remappingFunction) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -266,9 +265,7 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 		private static final long serialVersionUID = 2407578793783925203L;
 
-		@SuppressWarnings("serial")
 		private final Set<Entry<K, List<V>>> delegate;
-
 
 		@SuppressWarnings("unchecked")
 		public UnmodifiableEntrySet(Set<? extends Entry<? extends K, ? extends List<? extends V>>> delegate) {
@@ -357,20 +354,13 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 		}
 
 		@Override
-		public int hashCode() {
-			return this.delegate.hashCode();
+		public boolean equals(@Nullable Object other) {
+			return (this == other || other instanceof Set<?> that && size() == that.size() && containsAll(that));
 		}
 
 		@Override
-		public boolean equals(@Nullable Object obj) {
-			if (this == obj) {
-				return true;
-			}
-			else if (obj instanceof Set<?> other) {
-				return other.size() == this.delegate.size() &&
-						containsAll(other);
-			}
-			return false;
+		public int hashCode() {
+			return this.delegate.hashCode();
 		}
 
 		@Override
@@ -420,10 +410,10 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 			private final Spliterator<Entry<K, List<V>>> delegate;
 
-
 			@SuppressWarnings("unchecked")
 			public UnmodifiableEntrySpliterator(
 					Spliterator<? extends Entry<? extends K, ? extends List<? extends V>>> delegate) {
+
 				this.delegate = (Spliterator<Entry<K, List<V>>>) delegate;
 			}
 
@@ -480,7 +470,6 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 			private final Entry<K, List<V>> delegate;
 
-
 			@SuppressWarnings("unchecked")
 			public UnmodifiableEntry(Entry<? extends K, ? extends List<? extends V>> delegate) {
 				Assert.notNull(delegate, "Delegate must not be null");
@@ -503,20 +492,14 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 			}
 
 			@Override
-			public int hashCode() {
-				return this.delegate.hashCode();
+			public boolean equals(@Nullable Object other) {
+				return (this == other || (other instanceof Map.Entry<?, ?> that &&
+						getKey().equals(that.getKey()) && getValue().equals(that.getValue())));
 			}
 
 			@Override
-			public boolean equals(@Nullable Object obj) {
-				if (this == obj) {
-					return true;
-				}
-				else if (obj instanceof Map.Entry<?, ?> other) {
-					return getKey().equals(other.getKey()) &&
-							getValue().equals(other.getValue());
-				}
-				return false;
+			public int hashCode() {
+				return this.delegate.hashCode();
 			}
 
 			@Override
@@ -531,9 +514,7 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 
 		private static final long serialVersionUID = 5518377583904339588L;
 
-		@SuppressWarnings("serial")
 		private final Collection<List<V>> delegate;
-
 
 		public UnmodifiableValueCollection(Collection<List<V>> delegate) {
 			this.delegate = delegate;
@@ -620,13 +601,13 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 		}
 
 		@Override
-		public int hashCode() {
-			return this.delegate.hashCode();
+		public boolean equals(@Nullable Object other) {
+			return (this == other || this.delegate.equals(other));
 		}
 
 		@Override
-		public boolean equals(@Nullable Object obj) {
-			return this == obj || this.delegate.equals(obj);
+		public int hashCode() {
+			return this.delegate.hashCode();
 		}
 
 		@Override
@@ -675,7 +656,6 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 		private static class UnmodifiableValueSpliterator<T> implements Spliterator<List<T>> {
 
 			private final Spliterator<List<T>> delegate;
-
 
 			public UnmodifiableValueSpliterator(Spliterator<List<T>> delegate) {
 				this.delegate = delegate;
@@ -728,6 +708,6 @@ final class UnmodifiableMultiValueMap<K,V> implements MultiValueMap<K,V>, Serial
 				return this.delegate.getComparator();
 			}
 		}
-
 	}
+
 }

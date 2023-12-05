@@ -159,6 +159,10 @@ public class BindingReflectionHintsRegistrar {
 			for (ResolvableType genericResolvableType : resolvableType.getGenerics()) {
 				collectReferencedTypes(types, genericResolvableType);
 			}
+			Class<?> superClass = clazz.getSuperclass();
+			if (superClass != null && superClass != Object.class && superClass != Record.class && superClass != Enum.class) {
+				types.add(superClass);
+			}
 		}
 	}
 
@@ -187,7 +191,7 @@ public class BindingReflectionHintsRegistrar {
 				.from(element, MergedAnnotations.SearchStrategy.TYPE_HIERARCHY)
 				.stream(JACKSON_ANNOTATION)
 				.filter(MergedAnnotation::isMetaPresent)
-				.forEach(action::accept);
+				.forEach(action);
 	}
 
 	private void registerHintsForClassAttributes(ReflectionHints hints, MergedAnnotation<Annotation> annotation) {

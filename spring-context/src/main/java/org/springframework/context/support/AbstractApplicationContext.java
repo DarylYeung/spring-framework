@@ -106,25 +106,33 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		implements ConfigurableApplicationContext {
 
 	/**
-	 * Name of the MessageSource bean in the factory.
-	 * If none is supplied, message resolution is delegated to the parent.
-	 * @see MessageSource
-	 */
-	public static final String MESSAGE_SOURCE_BEAN_NAME = "messageSource";
-
-	/**
-	 * Name of the LifecycleProcessor bean in the factory.
-	 * If none is supplied, a DefaultLifecycleProcessor is used.
+	 * The name of the {@link LifecycleProcessor} bean in the context.
+	 * If none is supplied, a {@link DefaultLifecycleProcessor} is used.
+	 * @since 3.0
 	 * @see org.springframework.context.LifecycleProcessor
 	 * @see org.springframework.context.support.DefaultLifecycleProcessor
+	 * @see #start()
+	 * @see #stop()
 	 */
 	public static final String LIFECYCLE_PROCESSOR_BEAN_NAME = "lifecycleProcessor";
 
 	/**
-	 * Name of the ApplicationEventMulticaster bean in the factory.
-	 * If none is supplied, a default SimpleApplicationEventMulticaster is used.
+	 * The name of the {@link MessageSource} bean in the context.
+	 * If none is supplied, message resolution is delegated to the parent.
+	 * @see org.springframework.context.MessageSource
+	 * @see org.springframework.context.support.ResourceBundleMessageSource
+	 * @see org.springframework.context.support.ReloadableResourceBundleMessageSource
+	 * @see #getMessage(MessageSourceResolvable, Locale)
+	 */
+	public static final String MESSAGE_SOURCE_BEAN_NAME = "messageSource";
+
+	/**
+	 * The name of the {@link ApplicationEventMulticaster} bean in the context.
+	 * If none is supplied, a {@link SimpleApplicationEventMulticaster} is used.
 	 * @see org.springframework.context.event.ApplicationEventMulticaster
 	 * @see org.springframework.context.event.SimpleApplicationEventMulticaster
+	 * @see #publishEvent(ApplicationEvent)
+	 * @see #addApplicationListener(ApplicationListener)
 	 */
 	public static final String APPLICATION_EVENT_MULTICASTER_BEAN_NAME = "applicationEventMulticaster";
 
@@ -403,8 +411,8 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		if (this.earlyApplicationEvents != null) {
 			this.earlyApplicationEvents.add(applicationEvent);
 		}
-		else {
-			getApplicationEventMulticaster().multicastEvent(applicationEvent, eventType);
+		else if (this.applicationEventMulticaster != null) {
+			this.applicationEventMulticaster.multicastEvent(applicationEvent, eventType);
 		}
 
 		// Publish event via parent context as well...
@@ -613,12 +621,11 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 				finishRefresh();
 			}
 
-			catch (BeansException ex) {
+			catch (RuntimeException | Error ex ) {
 				if (logger.isWarnEnabled()) {
 					logger.warn("Exception encountered during context initialization - " +
 							"cancelling refresh attempt: " + ex);
 				}
-
 				// Destroy already created singletons to avoid dangling resources.
 				destroyBeans();
 
@@ -973,7 +980,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	 * after an exception got thrown.
 	 * @param ex the exception that led to the cancellation
 	 */
-	protected void cancelRefresh(BeansException ex) {
+	protected void cancelRefresh(Throwable ex) {
 		this.active.set(false);
 
 		// Reset common introspection caches in Spring's core infrastructure.
@@ -1091,11 +1098,19 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			// Let subclasses do some final clean-up if they wish...
 			onClose();
 
+			// Reset common introspection caches to avoid class reference leaks.
+			resetCommonCaches();
+
 			// Reset local application listeners to pre-refresh state.
 			if (this.earlyApplicationListeners != null) {
 				this.applicationListeners.clear();
 				this.applicationListeners.addAll(this.earlyApplicationListeners);
 			}
+
+			// Reset internal delegates.
+			this.applicationEventMulticaster = null;
+			this.messageSource = null;
+			this.lifecycleProcessor = null;
 
 			// Switch to inactive.
 			this.active.set(false);

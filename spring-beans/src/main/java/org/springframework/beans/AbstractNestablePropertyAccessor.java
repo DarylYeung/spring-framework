@@ -291,7 +291,7 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 		String lastKey = tokens.keys[tokens.keys.length - 1];
 
 		if (propValue.getClass().isArray()) {
-			Class<?> requiredType = propValue.getClass().getComponentType();
+			Class<?> requiredType = propValue.getClass().componentType();
 			int arrayIndex = Integer.parseInt(lastKey);
 			Object oldValue = null;
 			try {
@@ -302,7 +302,7 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 						requiredType, ph.nested(tokens.keys.length));
 				int length = Array.getLength(propValue);
 				if (arrayIndex >= length && arrayIndex < this.autoGrowCollectionLimit) {
-					Class<?> componentType = propValue.getClass().getComponentType();
+					Class<?> componentType = propValue.getClass().componentType();
 					Object newArray = Array.newInstance(componentType, arrayIndex + 1);
 					System.arraycopy(propValue, 0, newArray, 0, length);
 					int lastKeyIndex = tokens.canonicalName.lastIndexOf('[');
@@ -769,7 +769,7 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 		}
 		int length = Array.getLength(array);
 		if (index >= length && index < this.autoGrowCollectionLimit) {
-			Class<?> componentType = array.getClass().getComponentType();
+			Class<?> componentType = array.getClass().componentType();
 			Object newArray = Array.newInstance(componentType, index + 1);
 			System.arraycopy(array, 0, newArray, 0, length);
 			for (int i = length; i < Array.getLength(newArray); i++) {
@@ -900,11 +900,11 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 	private Object newValue(Class<?> type, @Nullable TypeDescriptor desc, String name) {
 		try {
 			if (type.isArray()) {
-				Class<?> componentType = type.getComponentType();
+				Class<?> componentType = type.componentType();
 				// TODO - only handles 2-dimensional arrays
 				if (componentType.isArray()) {
 					Object array = Array.newInstance(componentType, 1);
-					Array.set(array, 0, Array.newInstance(componentType.getComponentType(), 0));
+					Array.set(array, 0, Array.newInstance(componentType.componentType(), 0));
 					return array;
 				}
 				else {
@@ -976,11 +976,11 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 		int length = propertyName.length();
 		for (int i = startIndex; i < length; i++) {
 			switch (propertyName.charAt(i)) {
-				case PropertyAccessor.PROPERTY_KEY_PREFIX_CHAR:
+				case PropertyAccessor.PROPERTY_KEY_PREFIX_CHAR -> {
 					// The property name contains opening prefix(es)...
 					unclosedPrefixes++;
-					break;
-				case PropertyAccessor.PROPERTY_KEY_SUFFIX_CHAR:
+				}
+				case PropertyAccessor.PROPERTY_KEY_SUFFIX_CHAR -> {
 					if (unclosedPrefixes == 0) {
 						// No unclosed prefix(es) in the property name (left) ->
 						// this is the suffix we are looking for.
@@ -991,12 +991,11 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 						// just one that occurred within the property name.
 						unclosedPrefixes--;
 					}
-					break;
+				}
 			}
 		}
 		return -1;
 	}
-
 
 	@Override
 	public String toString() {
@@ -1013,18 +1012,20 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 	 */
 	protected abstract static class PropertyHandler {
 
+		@Nullable
 		private final Class<?> propertyType;
 
 		private final boolean readable;
 
 		private final boolean writable;
 
-		public PropertyHandler(Class<?> propertyType, boolean readable, boolean writable) {
+		public PropertyHandler(@Nullable Class<?> propertyType, boolean readable, boolean writable) {
 			this.propertyType = propertyType;
 			this.readable = readable;
 			this.writable = writable;
 		}
 
+		@Nullable
 		public Class<?> getPropertyType() {
 			return this.propertyType;
 		}

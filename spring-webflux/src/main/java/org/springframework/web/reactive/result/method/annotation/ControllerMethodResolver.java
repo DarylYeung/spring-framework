@@ -55,7 +55,6 @@ import org.springframework.web.reactive.result.method.HandlerMethodArgumentResol
 import org.springframework.web.reactive.result.method.InvocableHandlerMethod;
 import org.springframework.web.reactive.result.method.SyncHandlerMethodArgumentResolver;
 import org.springframework.web.reactive.result.method.SyncInvocableHandlerMethod;
-import org.springframework.web.service.invoker.RequestParamArgumentResolver;
 
 /**
  * Package-private class to assist {@link RequestMappingHandlerAdapter} with
@@ -88,7 +87,7 @@ class ControllerMethodResolver {
 			(!AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class) &&
 					AnnotatedElementUtils.hasAnnotation(method, ModelAttribute.class));
 
-	private final static boolean BEAN_VALIDATION_PRESENT =
+	private static final boolean BEAN_VALIDATION_PRESENT =
 			ClassUtils.isPresent("jakarta.validation.Validator", HandlerMethod.class.getClassLoader());
 
 	private static final Log logger = LogFactory.getLog(ControllerMethodResolver.class);
@@ -142,7 +141,7 @@ class ControllerMethodResolver {
 		if (BEAN_VALIDATION_PRESENT) {
 			this.methodValidator = HandlerMethodValidator.from(webBindingInitializer, null,
 					methodParamPredicate(this.requestMappingResolvers, ModelAttributeMethodArgumentResolver.class),
-					methodParamPredicate(this.requestMappingResolvers, RequestParamArgumentResolver.class));
+					methodParamPredicate(this.requestMappingResolvers, RequestParamMethodArgumentResolver.class));
 		}
 		else {
 			this.methodValidator = null;

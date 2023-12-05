@@ -412,28 +412,25 @@ public class LocalSessionFactoryBuilder extends Configuration {
 
 		@Override
 		public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-			switch (method.getName()) {
-				case "equals":
-					// Only consider equal when proxies are identical.
-					return (proxy == args[0]);
-				case "hashCode":
-					// Use hashCode of EntityManagerFactory proxy.
-					return System.identityHashCode(proxy);
-				case "getProperties":
-					return getProperties();
-				case "getWrappedObject":
-					// Call coming in through InfrastructureProxy interface...
-					return getSessionFactory();
-			}
-
-			// Regular delegation to the target SessionFactory,
-			// enforcing its full initialization...
-			try {
-				return method.invoke(getSessionFactory(), args);
-			}
-			catch (InvocationTargetException ex) {
-				throw ex.getTargetException();
-			}
+			return switch (method.getName()) {
+				// Only consider equal when proxies are identical.
+				case "equals" -> (proxy == args[0]);
+				// Use hashCode of EntityManagerFactory proxy.
+				case "hashCode" -> System.identityHashCode(proxy);
+				case "getProperties" -> getProperties();
+				// Call coming in through InfrastructureProxy interface...
+				case "getWrappedObject" -> getSessionFactory();
+				default -> {
+					try {
+						// Regular delegation to the target SessionFactory,
+						// enforcing its full initialization...
+						yield method.invoke(getSessionFactory(), args);
+					}
+					catch (InvocationTargetException ex) {
+						throw ex.getTargetException();
+					}
+				}
+			};
 		}
 
 		private SessionFactory getSessionFactory() {

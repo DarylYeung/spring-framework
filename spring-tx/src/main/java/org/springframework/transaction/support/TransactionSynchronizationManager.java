@@ -297,6 +297,9 @@ public abstract class TransactionSynchronizationManager {
 		if (synchs.isEmpty()) {
 			return Collections.emptyList();
 		}
+		else if (synchs.size() == 1) {
+			return Collections.singletonList(synchs.iterator().next());
+		}
 		else {
 			// Sort lazily here, not in registerSynchronization.
 			List<TransactionSynchronization> sortedSynchs = new ArrayList<>(synchs);
@@ -426,10 +429,10 @@ public abstract class TransactionSynchronizationManager {
 	 * Return whether there currently is an actual transaction active.
 	 * This indicates whether the current thread is associated with an actual
 	 * transaction rather than just with active transaction synchronization.
-	 * <p>To be called by resource management code that wants to discriminate
-	 * between active transaction synchronization (with or without backing
+	 * <p>To be called by resource management code that wants to differentiate
+	 * between active transaction synchronization (with or without a backing
 	 * resource transaction; also on PROPAGATION_SUPPORTS) and an actual
-	 * transaction being active (with backing resource transaction;
+	 * transaction being active (with a backing resource transaction;
 	 * on PROPAGATION_REQUIRED, PROPAGATION_REQUIRES_NEW, etc).
 	 * @see #isSynchronizationActive()
 	 */

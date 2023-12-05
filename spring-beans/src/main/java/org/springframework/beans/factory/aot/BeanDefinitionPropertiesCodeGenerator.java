@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -34,13 +35,16 @@ import java.util.function.Predicate;
 
 import org.springframework.aot.generate.GeneratedMethods;
 import org.springframework.aot.hint.ExecutableMode;
+import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.TypeReference;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.MutablePropertyValues;
 import org.springframework.beans.PropertyValue;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.beans.factory.config.ConstructorArgumentValues;
 import org.springframework.beans.factory.config.ConstructorArgumentValues.ValueHolder;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.AutowireCandidateQualifier;
@@ -128,6 +132,8 @@ class BeanDefinitionPropertiesCodeGenerator {
 
 	private void addInitDestroyMethods(Builder code, AbstractBeanDefinition beanDefinition,
 			@Nullable String[] methodNames, String format) {
+		// For Publisher-based destroy methods
+		this.hints.reflection().registerType(TypeReference.of("org.reactivestreams.Publisher"));
 		if (!ObjectUtils.isEmpty(methodNames)) {
 			Class<?> beanType = ClassUtils.getUserClass(beanDefinition.getResolvableType().toClass());
 			Arrays.stream(methodNames).forEach(methodName -> addInitDestroyHint(beanType, methodName));
@@ -164,14 +170,38 @@ class BeanDefinitionPropertiesCodeGenerator {
 	}
 
 	private void addConstructorArgumentValues(CodeBlock.Builder code, BeanDefinition beanDefinition) {
-		Map<Integer, ValueHolder> argumentValues =
-				beanDefinition.getConstructorArgumentValues().getIndexedArgumentValues();
-		if (!argumentValues.isEmpty()) {
-			argumentValues.forEach((index, valueHolder) -> {
-				CodeBlock valueCode = generateValue(valueHolder.getName(), valueHolder.getValue());
+		ConstructorArgumentValues constructorValues = beanDefinition.getConstructorArgumentValues();
+		Map<Integer, ValueHolder> indexedValues = constructorValues.getIndexedArgumentValues();
+		if (!indexedValues.isEmpty()) {
+			indexedValues.forEach((index, valueHolder) -> {
+				Object value = valueHolder.getValue();
+				CodeBlock valueCode = castIfNecessary(value == null, Object.class,
+						generateValue(valueHolder.getName(), value));
 				code.addStatement(
 						"$L.getConstructorArgumentValues().addIndexedArgumentValue($L, $L)",
 						BEAN_DEFINITION_VARIABLE, index, valueCode);
+			});
+		}
+		List<ValueHolder> genericValues = constructorValues.getGenericArgumentValues();
+		if (!genericValues.isEmpty()) {
+			genericValues.forEach(valueHolder -> {
+				String valueName = valueHolder.getName();
+				CodeBlock valueCode = generateValue(valueName, valueHolder.getValue());
+				if (valueName != null) {
+					CodeBlock valueTypeCode = this.valueCodeGenerator.generateCode(valueHolder.getType());
+					code.addStatement(
+							"$L.getConstructorArgumentValues().addGenericArgumentValue(new $T($L, $L, $S))",
+							BEAN_DEFINITION_VARIABLE, ValueHolder.class, valueCode, valueTypeCode, valueName);
+				}
+				else if (valueHolder.getType() != null) {
+					code.addStatement("$L.getConstructorArgumentValues().addGenericArgumentValue($L, $S)",
+							BEAN_DEFINITION_VARIABLE, valueCode, valueHolder.getType());
+
+				}
+				else {
+					code.addStatement("$L.getConstructorArgumentValues().addGenericArgumentValue($L)",
+							BEAN_DEFINITION_VARIABLE, valueCode);
+				}
 			});
 		}
 	}
@@ -179,23 +209,30 @@ class BeanDefinitionPropertiesCodeGenerator {
 	private void addPropertyValues(CodeBlock.Builder code, RootBeanDefinition beanDefinition) {
 		MutablePropertyValues propertyValues = beanDefinition.getPropertyValues();
 		if (!propertyValues.isEmpty()) {
+			Class<?> infrastructureType = getInfrastructureType(beanDefinition);
+			Map<String, Method> writeMethods = (infrastructureType != Object.class) ? getWriteMethods(infrastructureType) : Collections.emptyMap();
 			for (PropertyValue propertyValue : propertyValues) {
 				String name = propertyValue.getName();
 				CodeBlock valueCode = generateValue(name, propertyValue.getValue());
 				code.addStatement("$L.getPropertyValues().addPropertyValue($S, $L)",
-						BEAN_DEFINITION_VARIABLE, propertyValue.getName(), valueCode);
-			}
-			Class<?> infrastructureType = getInfrastructureType(beanDefinition);
-			if (infrastructureType != Object.class) {
-				Map<String, Method> writeMethods = getWriteMethods(infrastructureType);
-				for (PropertyValue propertyValue : propertyValues) {
-					Method writeMethod = writeMethods.get(propertyValue.getName());
-					if (writeMethod != null) {
-						this.hints.reflection().registerMethod(writeMethod, ExecutableMode.INVOKE);
-					}
+						BEAN_DEFINITION_VARIABLE, name, valueCode);
+				Method writeMethod = writeMethods.get(name);
+				if (writeMethod != null) {
+					registerReflectionHints(beanDefinition, writeMethod);
 				}
 			}
 		}
+	}
+
+	private void registerReflectionHints(RootBeanDefinition beanDefinition, Method writeMethod) {
+		this.hints.reflection().registerMethod(writeMethod, ExecutableMode.INVOKE);
+		// ReflectionUtils#findField searches recursively in the type hierarchy
+		Class<?> searchType = beanDefinition.getTargetType();
+		while (searchType != null && searchType != writeMethod.getDeclaringClass()) {
+			this.hints.reflection().registerType(searchType, MemberCategory.DECLARED_FIELDS);
+			searchType = searchType.getSuperclass();
+		}
+		this.hints.reflection().registerType(writeMethod.getDeclaringClass(), MemberCategory.DECLARED_FIELDS);
 	}
 
 	private void addQualifiers(CodeBlock.Builder code, RootBeanDefinition beanDefinition) {
@@ -311,12 +348,26 @@ class BeanDefinitionPropertiesCodeGenerator {
 		}
 	}
 
+	/**
+	 * Cast the specified {@code valueCode} to the specified {@code castType} if
+	 * the {@code castNecessary} is {@code true}. Otherwise return the valueCode
+	 * as is.
+	 * @param castNecessary whether a cast is necessary
+	 * @param castType the type to cast to
+	 * @param valueCode the code for the value
+	 * @return the existing value or a form of {@code (CastType) valueCode} if a
+	 * cast is necessary
+	 */
+	private CodeBlock castIfNecessary(boolean castNecessary, Class<?> castType, CodeBlock valueCode) {
+		return (castNecessary ? CodeBlock.of("($T) $L", castType, valueCode) : valueCode);
+	}
+
 	static class PropertyNamesStack {
 
 		private static final ThreadLocal<ArrayDeque<String>> threadLocal = ThreadLocal.withInitial(ArrayDeque::new);
 
 		static void push(@Nullable String name) {
-			String valueToSet = (name != null) ? name : "";
+			String valueToSet = (name != null ? name : "");
 			threadLocal.get().push(valueToSet);
 		}
 

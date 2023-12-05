@@ -32,8 +32,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -72,6 +75,7 @@ import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.testfixture.io.SerializationTestUtils;
 import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.ReflectionUtils;
 
@@ -1403,6 +1407,20 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 	}
 
 	@Test
+	void constructorInjectionWithSortedMapFallback() {
+		RootBeanDefinition bd = new RootBeanDefinition(SortedMapConstructorInjectionBean.class);
+		bf.registerBeanDefinition("annotatedBean", bd);
+		TestBean tb1 = new TestBean();
+		TestBean tb2 = new TestBean();
+		bf.registerSingleton("testBean1", tb1);
+		bf.registerSingleton("testBean2", tb2);
+
+		SortedMapConstructorInjectionBean bean = bf.getBean("annotatedBean", SortedMapConstructorInjectionBean.class);
+		assertThat(bean.getTestBeanMap()).containsEntry("testBean1", tb1);
+		assertThat(bean.getTestBeanMap()).containsEntry("testBean2", tb2);
+	}
+
+	@Test
 	void constructorInjectionWithTypedSetAsBean() {
 		RootBeanDefinition bd = new RootBeanDefinition(SetConstructorInjectionBean.class);
 		bd.setScope(BeanDefinition.SCOPE_PROTOTYPE);
@@ -1443,11 +1461,26 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 		RootBeanDefinition tbs = new RootBeanDefinition(CustomCollectionFactoryMethods.class);
 		tbs.setUniqueFactoryMethodName("testBeanSet");
 		bf.registerBeanDefinition("myTestBeanSet", tbs);
+		bf.registerSingleton("testBean1", new TestBean());
+		bf.registerSingleton("testBean2", new TestBean());
 
 		CustomSetConstructorInjectionBean bean = bf.getBean("annotatedBean", CustomSetConstructorInjectionBean.class);
 		assertThat(bean.getTestBeanSet()).isSameAs(bf.getBean("myTestBeanSet"));
 		bean = bf.getBean("annotatedBean", CustomSetConstructorInjectionBean.class);
 		assertThat(bean.getTestBeanSet()).isSameAs(bf.getBean("myTestBeanSet"));
+	}
+
+	@Test
+	void constructorInjectionWithSortedSetFallback() {
+		RootBeanDefinition bd = new RootBeanDefinition(SortedSetConstructorInjectionBean.class);
+		bf.registerBeanDefinition("annotatedBean", bd);
+		TestBean tb1 = new TestBean();
+		TestBean tb2 = new TestBean();
+		bf.registerSingleton("testBean1", tb1);
+		bf.registerSingleton("testBean2", tb2);
+
+		SortedSetConstructorInjectionBean bean = bf.getBean("annotatedBean", SortedSetConstructorInjectionBean.class);
+		assertThat(bean.getTestBeanSet()).contains(tb1, tb2);
 	}
 
 	@Test
@@ -2568,6 +2601,26 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 		assertThat(bean.testBean).isSameAs(bf.getBean("annotatedBean"));
 	}
 
+	@Test
+	public void mixedNullableArgMethodInjection(){
+		bf.registerSingleton("nonNullBean", "Test");
+		bf.registerBeanDefinition("mixedNullableInjectionBean",
+				new RootBeanDefinition(MixedNullableInjectionBean.class));
+		MixedNullableInjectionBean mixedNullableInjectionBean = bf.getBean(MixedNullableInjectionBean.class);
+		assertThat(mixedNullableInjectionBean.nonNullBean).isNotNull();
+		assertThat(mixedNullableInjectionBean.nullableBean).isNull();
+	}
+
+	@Test
+	public void mixedOptionalArgMethodInjection(){
+		bf.registerSingleton("nonNullBean", "Test");
+		bf.registerBeanDefinition("mixedOptionalInjectionBean",
+				new RootBeanDefinition(MixedOptionalInjectionBean.class));
+		MixedOptionalInjectionBean mixedOptionalInjectionBean = bf.getBean(MixedOptionalInjectionBean.class);
+		assertThat(mixedOptionalInjectionBean.nonNullBean).isNotNull();
+		assertThat(mixedOptionalInjectionBean.nullableBean).isNull();
+	}
+
 	private <E extends UnsatisfiedDependencyException> Consumer<E> methodParameterDeclaredOn(
 			Class<?> expected) {
 		return declaredOn(
@@ -2605,13 +2658,12 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 		@Autowired(required = false)
 		private TestBean testBean;
 
-		private TestBean testBean2;
+		TestBean testBean2;
 
 		@Autowired
 		public void setTestBean2(TestBean testBean2) {
-			if (this.testBean2 != null) {
-				throw new IllegalStateException("Already called");
-			}
+			Assert.state(this.testBean != null, "Wrong initialization order");
+			Assert.state(this.testBean2 == null, "Already called");
 			this.testBean2 = testBean2;
 		}
 
@@ -2643,9 +2695,8 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 
 		@Override
 		@Autowired
-		@SuppressWarnings("deprecation")
 		public void setTestBean2(TestBean testBean2) {
-			super.setTestBean2(testBean2);
+			this.testBean2 = testBean2;
 		}
 
 		@Autowired
@@ -2661,6 +2712,7 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 
 		@Autowired
 		protected void initBeanFactory(BeanFactory beanFactory) {
+			Assert.state(this.baseInjected, "Wrong initialization order");
 			this.beanFactory = beanFactory;
 		}
 
@@ -3116,6 +3168,21 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 	}
 
 
+	public static class SortedMapConstructorInjectionBean {
+
+		private SortedMap<String, TestBean> testBeanMap;
+
+		@Autowired
+		public SortedMapConstructorInjectionBean(SortedMap<String, TestBean> testBeanMap) {
+			this.testBeanMap = testBeanMap;
+		}
+
+		public SortedMap<String, TestBean> getTestBeanMap() {
+			return this.testBeanMap;
+		}
+	}
+
+
 	public static class QualifiedMapConstructorInjectionBean {
 
 		private Map<String, TestBean> testBeanMap;
@@ -3141,6 +3208,21 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 		}
 
 		public Set<TestBean> getTestBeanSet() {
+			return this.testBeanSet;
+		}
+	}
+
+
+	public static class SortedSetConstructorInjectionBean {
+
+		private SortedSet<TestBean> testBeanSet;
+
+		@Autowired
+		public SortedSetConstructorInjectionBean(SortedSet<TestBean> testBeanSet) {
+			this.testBeanSet = testBeanSet;
+		}
+
+		public SortedSet<TestBean> getTestBeanSet() {
 			return this.testBeanSet;
 		}
 	}
@@ -4079,14 +4161,12 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 	}
 
 
-	public static abstract class Foo<T extends Runnable, RT extends Callable<T>> {
+	public abstract static class Foo<T extends Runnable, RT extends Callable<T>> {
 
 		private RT obj;
 
 		protected void setObj(RT obj) {
-			if (this.obj != null) {
-				throw new IllegalStateException("Already called");
-			}
+			Assert.state(this.obj == null, "Already called");
 			this.obj = obj;
 		}
 	}
@@ -4284,6 +4364,36 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 		@Order(0)
 		public static TestBean newTestBean2() {
 			return new TestBean();
+		}
+	}
+
+
+	static class MixedNullableInjectionBean {
+
+		@Nullable
+		public Integer nullableBean;
+
+		public String nonNullBean;
+
+		@Autowired(required = false)
+		public void nullabilityInjection(@Nullable Integer nullableBean, String nonNullBean) {
+			this.nullableBean = nullableBean;
+			this.nonNullBean = nonNullBean;
+		}
+	}
+
+
+	static class MixedOptionalInjectionBean {
+
+		@Nullable
+		public Integer nullableBean;
+
+		public String nonNullBean;
+
+		@Autowired(required = false)
+		public void optionalInjection(Optional<Integer> optionalBean, String nonNullBean) {
+			optionalBean.ifPresent(bean -> this.nullableBean = bean);
+			this.nonNullBean = nonNullBean;
 		}
 	}
 

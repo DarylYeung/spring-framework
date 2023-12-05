@@ -144,9 +144,9 @@ public abstract class JmsAccessor implements InitializingBean {
 	 */
 	public void setSessionAcknowledgeModeName(String constantName) {
 		Assert.hasText(constantName, "'constantName' must not be null or blank");
-		Integer acknowledgeMode = sessionConstants.get(constantName);
-		Assert.notNull(acknowledgeMode, "Only acknowledge mode constants allowed");
-		setSessionAcknowledgeMode(acknowledgeMode);
+		Integer sessionAcknowledgeMode = sessionConstants.get(constantName);
+		Assert.notNull(sessionAcknowledgeMode, "Only acknowledge mode constants allowed");
+		this.sessionAcknowledgeMode = sessionAcknowledgeMode;
 	}
 
 	/**

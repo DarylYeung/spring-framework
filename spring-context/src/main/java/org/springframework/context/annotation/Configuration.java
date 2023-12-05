@@ -105,8 +105,8 @@ import org.springframework.stereotype.Component;
  *
  * }</pre>
  *
- * <p>{@code @Configuration} classes may not only be bootstrapped using
- * component scanning, but may also themselves <em>configure</em> component scanning using
+ * <p>{@code @Configuration} classes may not only be bootstrapped using component
+ * scanning, but may also themselves <em>configure</em> component scanning using
  * the {@link ComponentScan @ComponentScan} annotation:
  *
  * <pre class="code">
@@ -434,6 +434,7 @@ public @interface Configuration {
 	 * {@link AnnotationConfigApplicationContext}. If the {@code @Configuration} class
 	 * is registered as a traditional XML bean definition, the name/id of the bean
 	 * element will take precedence.
+	 * <p>Alias for {@link Component#value}.
 	 * @return the explicit component name, if any (or empty String otherwise)
 	 * @see AnnotationBeanNameGenerator
 	 */

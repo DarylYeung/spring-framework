@@ -84,13 +84,13 @@ The preceding example is for use in Spring MVC applications and should be includ
 in the configuration of a xref:web/webmvc/mvc-servlet.adoc[`DispatcherServlet`]. However, Spring's
 WebSocket support does not depend on Spring MVC. It is relatively simple to
 integrate a `WebSocketHandler` into other HTTP-serving environments with the help of
-{api-spring-framework}/web/socket/server/support/WebSocketHttpRequestHandler.html[`WebSocketHttpRequestHandler`].
+{spring-framework-api}/web/socket/server/support/WebSocketHttpRequestHandler.html[`WebSocketHttpRequestHandler`].
 
 When using the `WebSocketHandler` API directly vs indirectly, e.g. through the
 xref:web/websocket/stomp.adoc[STOMP] messaging, the application must synchronize the sending of messages
 since the underlying standard WebSocket session (JSR-356) does not allow concurrent
 sending. One option is to wrap the `WebSocketSession` with
-{api-spring-framework}/web/socket/handler/ConcurrentWebSocketSessionDecorator.html[`ConcurrentWebSocketSessionDecorator`].
+{spring-framework-api}/web/socket/handler/ConcurrentWebSocketSessionDecorator.html[`ConcurrentWebSocketSessionDecorator`].
 
 
 
@@ -229,34 +229,27 @@ Java initialization API. The following example shows how to do so:
 
 
 [[websocket-server-runtime-configuration]]
-== Server Configuration
+== Configuring the Server
 [.small]#xref:web/webflux-websocket.adoc#webflux-websocket-server-config[See equivalent in the Reactive stack]#
 
-Each underlying WebSocket engine exposes configuration properties that control
-runtime characteristics, such as the size of message buffer sizes, idle timeout,
-and others.
+You can configure of the underlying WebSocket server such as input message buffer size,
+idle timeout, and more.
 
-For Tomcat, WildFly, and GlassFish, you can add a `ServletServerContainerFactoryBean` to your
-WebSocket Java config, as the following example shows:
+For Jakarta WebSocket servers, you can add a `ServletServerContainerFactoryBean` to your
+Java configuration. For example:
 
 [source,java,indent=0,subs="verbatim,quotes"]
 ----
-	@Configuration
-	@EnableWebSocket
-	public class WebSocketConfig implements WebSocketConfigurer {
-
-		@Bean
-		public ServletServerContainerFactoryBean createWebSocketContainer() {
-			ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
-			container.setMaxTextMessageBufferSize(8192);
-			container.setMaxBinaryMessageBufferSize(8192);
-			return container;
-		}
-
-	}
+     @Bean
+     public ServletServerContainerFactoryBean createWebSocketContainer() {
+         ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
+         container.setMaxTextMessageBufferSize(8192);
+         container.setMaxBinaryMessageBufferSize(8192);
+         return container;
+     }
 ----
 
-The following example shows the XML configuration equivalent of the preceding example:
+Or to your XML configuration:
 
 [source,xml,indent=0,subs="verbatim,quotes,attributes"]
 ----
@@ -277,12 +270,11 @@ The following example shows the XML configuration equivalent of the preceding ex
 	</beans>
 ----
 
-NOTE: For client-side WebSocket configuration, you should use `WebSocketContainerFactoryBean`
-(XML) or `ContainerProvider.getWebSocketContainer()` (Java configuration).
+NOTE: For client Jakarta WebSocket configuration, use
+ContainerProvider.getWebSocketContainer() in Java configuration, or
+`WebSocketContainerFactoryBean` in XML.
 
-For Jetty, you need to supply a pre-configured Jetty `WebSocketServerFactory` and plug
-that into Spring's `DefaultHandshakeHandler` through your WebSocket Java config.
-The following example shows how to do so:
+For Jetty, you can supply a `Consumer` callback to configure the WebSocket server:
 
 [source,java,indent=0,subs="verbatim,quotes"]
 ----
@@ -292,62 +284,25 @@ The following example shows how to do so:
 
 		@Override
 		public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-			registry.addHandler(echoWebSocketHandler(),
-				"/echo").setHandshakeHandler(handshakeHandler());
+			registry.addHandler(echoWebSocketHandler(), "/echo").setHandshakeHandler(handshakeHandler());
 		}
 
 		@Bean
 		public DefaultHandshakeHandler handshakeHandler() {
-
-			WebSocketPolicy policy = new WebSocketPolicy(WebSocketBehavior.SERVER);
-			policy.setInputBufferSize(8192);
-			policy.setIdleTimeout(600000);
-
-			return new DefaultHandshakeHandler(
-					new JettyRequestUpgradeStrategy(new WebSocketServerFactory(policy)));
+			JettyRequestUpgradeStrategy strategy = new JettyRequestUpgradeStrategy();
+			strategy.addWebSocketConfigurer(configurable -> {
+					policy.setInputBufferSize(8192);
+					policy.setIdleTimeout(600000);
+			});
+			return new DefaultHandshakeHandler(strategy);
 		}
 
 	}
 ----
 
-The following example shows the XML configuration equivalent of the preceding example:
-
-[source,xml,indent=0,subs="verbatim,quotes,attributes"]
-----
-	<beans xmlns="http://www.springframework.org/schema/beans"
-		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		xmlns:websocket="http://www.springframework.org/schema/websocket"
-		xsi:schemaLocation="
-			http://www.springframework.org/schema/beans
-			https://www.springframework.org/schema/beans/spring-beans.xsd
-			http://www.springframework.org/schema/websocket
-			https://www.springframework.org/schema/websocket/spring-websocket.xsd">
-
-		<websocket:handlers>
-			<websocket:mapping path="/echo" handler="echoHandler"/>
-			<websocket:handshake-handler ref="handshakeHandler"/>
-		</websocket:handlers>
-
-		<bean id="handshakeHandler" class="org.springframework...DefaultHandshakeHandler">
-			<constructor-arg ref="upgradeStrategy"/>
-		</bean>
-
-		<bean id="upgradeStrategy" class="org.springframework...JettyRequestUpgradeStrategy">
-			<constructor-arg ref="serverFactory"/>
-		</bean>
-
-		<bean id="serverFactory" class="org.eclipse.jetty...WebSocketServerFactory">
-			<constructor-arg>
-				<bean class="org.eclipse.jetty...WebSocketPolicy">
-					<constructor-arg value="SERVER"/>
-					<property name="inputBufferSize" value="8092"/>
-					<property name="idleTimeout" value="600000"/>
-				</bean>
-			</constructor-arg>
-		</bean>
-
-	</beans>
-----
+TIP: When using STOMP over WebSocket, you will also need to configure
+xref:web/websocket/stomp/server-config.adoc[STOMP WebSocket transport]
+properties.
 
 
 
@@ -359,7 +314,7 @@ As of Spring Framework 4.1.5, the default behavior for WebSocket and SockJS is t
 only same-origin requests. It is also possible to allow all or a specified list of origins.
 This check is mostly designed for browser clients. Nothing prevents other types
 of clients from modifying the `Origin` header value (see
-https://tools.ietf.org/html/rfc6454[RFC 6454: The Web Origin Concept] for more details).
+{rfc-site}/rfc6454[RFC 6454: The Web Origin Concept] for more details).
 
 The three possible behaviors are:
 

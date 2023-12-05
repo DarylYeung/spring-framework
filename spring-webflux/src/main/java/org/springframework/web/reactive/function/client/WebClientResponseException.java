@@ -35,6 +35,7 @@ import org.springframework.util.Assert;
  * Exceptions that contain actual HTTP response data.
  *
  * @author Arjen Poutsma
+ * @author Sebastien Deleuze
  * @since 5.0
  */
 @SuppressWarnings("RedundantSuppression")
@@ -56,7 +57,7 @@ public class WebClientResponseException extends WebClientException {
 	private final Charset responseCharset;
 
 	@Nullable
-	private transient final HttpRequest request;
+	private final transient HttpRequest request;
 
 	@Nullable
 	private transient Function<ResolvableType, ?> bodyDecodeFunction;
@@ -202,11 +203,11 @@ public class WebClientResponseException extends WebClientException {
 	/**
 	 * Return the response content as a String using the charset of media type
 	 * for the response, if available, or otherwise falling back on
-	 * {@literal ISO-8859-1}. Use {@link #getResponseBodyAsString(Charset)} if
+	 * {@literal UTF-8}. Use {@link #getResponseBodyAsString(Charset)} if
 	 * you want to fall back on a different, default charset.
 	 */
 	public String getResponseBodyAsString() {
-		return getResponseBodyAsString(StandardCharsets.ISO_8859_1);
+		return getResponseBodyAsString(StandardCharsets.UTF_8);
 	}
 
 	/**
@@ -233,22 +234,21 @@ public class WebClientResponseException extends WebClientException {
 	 */
 	@Nullable
 	public <E> E getResponseBodyAs(Class<E> targetType) {
-		return getResponseBodyAs(ResolvableType.forClass(targetType));
+		return decodeBody(ResolvableType.forClass(targetType));
 	}
 
 	/**
-	 * Variant of {@link #getResponseBodyAs(Class)} with
-	 * {@link ParameterizedTypeReference}.
+	 * Variant of {@link #getResponseBodyAs(Class)} with {@link ParameterizedTypeReference}.
 	 * @since 6.0
 	 */
 	@Nullable
 	public <E> E getResponseBodyAs(ParameterizedTypeReference<E> targetType) {
-		return getResponseBodyAs(ResolvableType.forType(targetType.getType()));
+		return decodeBody(ResolvableType.forType(targetType.getType()));
 	}
 
 	@SuppressWarnings("unchecked")
 	@Nullable
-	private <E> E getResponseBodyAs(ResolvableType targetType) {
+	private <E> E decodeBody(ResolvableType targetType) {
 		Assert.state(this.bodyDecodeFunction != null, "Decoder function not set");
 		return (E) this.bodyDecodeFunction.apply(targetType);
 	}
@@ -303,40 +303,25 @@ public class WebClientResponseException extends WebClientException {
 			byte[] body, @Nullable Charset charset, @Nullable HttpRequest request) {
 
 		if (statusCode instanceof HttpStatus httpStatus) {
-			switch (httpStatus) {
-				case BAD_REQUEST:
-					return new WebClientResponseException.BadRequest(statusText, headers, body, charset, request);
-				case UNAUTHORIZED:
-					return new WebClientResponseException.Unauthorized(statusText, headers, body, charset, request);
-				case FORBIDDEN:
-					return new WebClientResponseException.Forbidden(statusText, headers, body, charset, request);
-				case NOT_FOUND:
-					return new WebClientResponseException.NotFound(statusText, headers, body, charset, request);
-				case METHOD_NOT_ALLOWED:
-					return new WebClientResponseException.MethodNotAllowed(statusText, headers, body, charset, request);
-				case NOT_ACCEPTABLE:
-					return new WebClientResponseException.NotAcceptable(statusText, headers, body, charset, request);
-				case CONFLICT:
-					return new WebClientResponseException.Conflict(statusText, headers, body, charset, request);
-				case GONE:
-					return new WebClientResponseException.Gone(statusText, headers, body, charset, request);
-				case UNSUPPORTED_MEDIA_TYPE:
-					return new WebClientResponseException.UnsupportedMediaType(statusText, headers, body, charset, request);
-				case TOO_MANY_REQUESTS:
-					return new WebClientResponseException.TooManyRequests(statusText, headers, body, charset, request);
-				case UNPROCESSABLE_ENTITY:
-					return new WebClientResponseException.UnprocessableEntity(statusText, headers, body, charset, request);
-				case INTERNAL_SERVER_ERROR:
-					return new WebClientResponseException.InternalServerError(statusText, headers, body, charset, request);
-				case NOT_IMPLEMENTED:
-					return new WebClientResponseException.NotImplemented(statusText, headers, body, charset, request);
-				case BAD_GATEWAY:
-					return new WebClientResponseException.BadGateway(statusText, headers, body, charset, request);
-				case SERVICE_UNAVAILABLE:
-					return new WebClientResponseException.ServiceUnavailable(statusText, headers, body, charset, request);
-				case GATEWAY_TIMEOUT:
-					return new WebClientResponseException.GatewayTimeout(statusText, headers, body, charset, request);
-			}
+			return switch (httpStatus) {
+				case BAD_REQUEST -> new WebClientResponseException.BadRequest(statusText, headers, body, charset, request);
+				case UNAUTHORIZED -> new WebClientResponseException.Unauthorized(statusText, headers, body, charset, request);
+				case FORBIDDEN -> new WebClientResponseException.Forbidden(statusText, headers, body, charset, request);
+				case NOT_FOUND -> new WebClientResponseException.NotFound(statusText, headers, body, charset, request);
+				case METHOD_NOT_ALLOWED -> new WebClientResponseException.MethodNotAllowed(statusText, headers, body, charset, request);
+				case NOT_ACCEPTABLE -> new WebClientResponseException.NotAcceptable(statusText, headers, body, charset, request);
+				case CONFLICT -> new WebClientResponseException.Conflict(statusText, headers, body, charset, request);
+				case GONE -> new WebClientResponseException.Gone(statusText, headers, body, charset, request);
+				case UNSUPPORTED_MEDIA_TYPE -> new WebClientResponseException.UnsupportedMediaType(statusText, headers, body, charset, request);
+				case TOO_MANY_REQUESTS -> new WebClientResponseException.TooManyRequests(statusText, headers, body, charset, request);
+				case UNPROCESSABLE_ENTITY -> new WebClientResponseException.UnprocessableEntity(statusText, headers, body, charset, request);
+				case INTERNAL_SERVER_ERROR -> new WebClientResponseException.InternalServerError(statusText, headers, body, charset, request);
+				case NOT_IMPLEMENTED -> new WebClientResponseException.NotImplemented(statusText, headers, body, charset, request);
+				case BAD_GATEWAY -> new WebClientResponseException.BadGateway(statusText, headers, body, charset, request);
+				case SERVICE_UNAVAILABLE -> new WebClientResponseException.ServiceUnavailable(statusText, headers, body, charset, request);
+				case GATEWAY_TIMEOUT -> new WebClientResponseException.GatewayTimeout(statusText, headers, body, charset, request);
+				default -> new WebClientResponseException(statusCode, statusText, headers, body, charset, request);
+			};
 		}
 		return new WebClientResponseException(statusCode, statusText, headers, body, charset, request);
 	}

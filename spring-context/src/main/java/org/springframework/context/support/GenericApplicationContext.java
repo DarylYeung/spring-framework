@@ -297,7 +297,7 @@ public class GenericApplicationContext extends AbstractApplicationContext implem
 	}
 
 	@Override
-	protected void cancelRefresh(BeansException ex) {
+	protected void cancelRefresh(Throwable ex) {
 		this.beanFactory.setSerializationId(null);
 		super.cancelRefresh(ex);
 	}
@@ -358,6 +358,11 @@ public class GenericApplicationContext extends AbstractApplicationContext implem
 	@Override
 	public BeanDefinition getBeanDefinition(String beanName) throws NoSuchBeanDefinitionException {
 		return this.beanFactory.getBeanDefinition(beanName);
+	}
+
+	@Override
+	public boolean isBeanDefinitionOverridable(String beanName) {
+		return this.beanFactory.isBeanDefinitionOverridable(beanName);
 	}
 
 	@Override

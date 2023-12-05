@@ -33,6 +33,12 @@ import org.springframework.core.annotation.AliasFor;
  *
  * <p>Method-level declarations override class-level declarations by default,
  * but this behavior can be configured via {@link SqlMergeMode @SqlMergeMode}.
+ * However, this does not apply to class-level declarations configured for the
+ * {@link ExecutionPhase#BEFORE_TEST_CLASS BEFORE_TEST_CLASS} or
+ * {@link ExecutionPhase#AFTER_TEST_CLASS AFTER_TEST_CLASS} execution phase. Such
+ * declarations cannot be overridden, and the corresponding scripts and statements
+ * will be executed once per class in addition to any method-level scripts and
+ * statements.
  *
  * <p>Script execution is performed by the {@link SqlScriptsTestExecutionListener},
  * which is enabled by default.
@@ -49,18 +55,21 @@ import org.springframework.core.annotation.AliasFor;
  * annotation. Otherwise, {@link SqlGroup @SqlGroup} can be used as an explicit
  * container for declaring multiple instances of {@code @Sql}.
  *
- * <p>This annotation may be used as a <em>meta-annotation</em> to create custom
- * <em>composed annotations</em> with attribute overrides.
- *
- * <p>As of Spring Framework 5.3, this annotation will be inherited from an
- * enclosing test class by default. See
+ * <p>This annotation will be inherited from an enclosing test class by default. See
  * {@link org.springframework.test.context.NestedTestConfiguration @NestedTestConfiguration}
- * for details.
+ * for details. This annotation may also be used as a <em>meta-annotation</em> to
+ * create custom <em>composed annotations</em> with attribute overrides.
+ *
+ * <p>If you want to see which SQL scripts are being executed, set the
+ * {@code org.springframework.test.context.jdbc} logging category to {@code DEBUG}.
+ * If you want to see which SQL statements are being executed, set the
+ * {@code org.springframework.jdbc.datasource.init} logging category to {@code DEBUG}.
  *
  * <p>Use of this annotation requires the {@code spring-jdbc} and {@code spring-tx}
  * modules as well as their transitive dependencies to be present on the classpath.
  *
  * @author Sam Brannen
+ * @author Andreas Ahlenstorf
  * @since 4.1
  * @see SqlConfig
  * @see SqlMergeMode
@@ -160,6 +169,20 @@ public @interface Sql {
 	 * Enumeration of <em>phases</em> that dictate when SQL scripts are executed.
 	 */
 	enum ExecutionPhase {
+
+		/**
+		 * The configured SQL scripts and statements will be executed
+		 * once per test class <em>before</em> any test method is run.
+		 * @since 6.1
+		 */
+		BEFORE_TEST_CLASS,
+
+		/**
+		 * The configured SQL scripts and statements will be executed
+		 * once per test class <em>after</em> all test methods have run.
+		 * @since 6.1
+		 */
+		AFTER_TEST_CLASS,
 
 		/**
 		 * The configured SQL scripts and statements will be executed

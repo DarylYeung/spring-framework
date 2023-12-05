@@ -35,27 +35,29 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.jdbc.support.rowset.SqlRowSet;
+import org.springframework.lang.Nullable;
 
 /**
- * A fluent {@link JdbcClient} with common JDBC query and update operations,
+ * A fluent {@code JdbcClient} with common JDBC query and update operations,
  * supporting JDBC-style positional as well as Spring-style named parameters
- * with a convenient unified facade for JDBC PreparedStatement execution.
+ * with a convenient unified facade for JDBC {@code PreparedStatement} execution.
  *
  * <p>An example for retrieving a query result as a {@code java.util.Optional}:
  * <pre class="code">
- * Optional&lt;Integer&gt; value = client.sql("SELECT AGE FROM CUSTMR WHERE ID = :id")
+ * Optional&lt;Integer&gt; value = client.sql("SELECT AGE FROM CUSTOMER WHERE ID = :id")
  *     .param("id", 3)
- *     .query((rs, rowNum) -> rs.getInt(1))
+ *     .query(Integer.class)
  *     .optional();
  * </pre>
  *
  * <p>Delegates to {@link org.springframework.jdbc.core.JdbcTemplate} and
  * {@link org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate}.
- * For complex JDBC operations, e.g. batch inserts and stored procedure calls,
- * you may use those lower-level template classes directly - or alternatively,
- * {@link SimpleJdbcInsert} and {@link SimpleJdbcCall}.
+ * For complex JDBC operations &mdash; for example, batch inserts and stored
+ * procedure calls &mdash; you may use those lower-level template classes directly,
+ * or alternatively {@link SimpleJdbcInsert} and {@link SimpleJdbcCall}.
  *
  * @author Juergen Hoeller
+ * @author Sam Brannen
  * @since 6.1
  * @see ResultSetExtractor
  * @see RowCallbackHandler
@@ -87,8 +89,8 @@ public interface JdbcClient {
 
 	/**
 	 * Create a {@code JdbcClient} for the given {@link JdbcOperations} delegate,
-	 * typically a {@link org.springframework.jdbc.core.JdbcTemplate}.
-	 * <p>Use this factory method for reusing existing {@code JdbcTemplate} configuration,
+	 * typically an {@link org.springframework.jdbc.core.JdbcTemplate}.
+	 * <p>Use this factory method to reuse existing {@code JdbcTemplate} configuration,
 	 * including its {@code DataSource}.
 	 * @param jdbcTemplate the delegate to perform operations on
 	 */
@@ -98,9 +100,9 @@ public interface JdbcClient {
 
 	/**
 	 * Create a {@code JdbcClient} for the given {@link NamedParameterJdbcOperations} delegate,
-	 * typically a {@link org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate}.
-	 * <p>Use this factory method for reusing existing {@code NamedParameterJdbcTemplate}
-	 * configuration, including its underlying {@code JdbcTemplate} and the {@code DataSource}.
+	 * typically an {@link org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate}.
+	 * <p>Use this factory method to reuse existing {@code NamedParameterJdbcTemplate}
+	 * configuration, including its underlying {@code JdbcTemplate} and {@code DataSource}.
 	 * @param jdbcTemplate the delegate to perform operations on
 	 */
 	static JdbcClient create(NamedParameterJdbcOperations jdbcTemplate) {
@@ -116,14 +118,14 @@ public interface JdbcClient {
 		/**
 		 * Bind a positional JDBC statement parameter for "?" placeholder resolution
 		 * by implicit order of parameter value registration.
-		 * <p>This is primarily intended for statements with a single or very few
-		 * parameters, registering each parameter value in the order of the
-		 * parameter's occurrence in the SQL statement.
+		 * <p>This is primarily intended for statements with a single parameter
+		 * or very few parameters, registering each parameter value in the order
+		 * of the parameter's occurrence in the SQL statement.
 		 * @param value the parameter value to bind
 		 * @return this statement specification (for chaining)
 		 * @see java.sql.PreparedStatement#setObject(int, Object)
 		 */
-		StatementSpec param(Object value);
+		StatementSpec param(@Nullable Object value);
 
 		/**
 		 * Bind a positional JDBC statement parameter for "?" placeholder resolution
@@ -133,7 +135,7 @@ public interface JdbcClient {
 		 * @return this statement specification (for chaining)
 		 * @see java.sql.PreparedStatement#setObject(int, Object)
 		 */
-		StatementSpec param(int jdbcIndex, Object value);
+		StatementSpec param(int jdbcIndex, @Nullable Object value);
 
 		/**
 		 * Bind a positional JDBC statement parameter for "?" placeholder resolution
@@ -144,7 +146,7 @@ public interface JdbcClient {
 		 * @return this statement specification (for chaining)
 		 * @see java.sql.PreparedStatement#setObject(int, Object, int)
 		 */
-		StatementSpec param(int jdbcIndex, Object value, int sqlType);
+		StatementSpec param(int jdbcIndex, @Nullable Object value, int sqlType);
 
 		/**
 		 * Bind a named statement parameter for ":x" placeholder resolution,
@@ -154,7 +156,7 @@ public interface JdbcClient {
 		 * @return this statement specification (for chaining)
 		 * @see org.springframework.jdbc.core.namedparam.MapSqlParameterSource#addValue(String, Object)
 		 */
-		StatementSpec param(String name, Object value);
+		StatementSpec param(String name, @Nullable Object value);
 
 		/**
 		 * Bind a named statement parameter for ":x" placeholder resolution,
@@ -165,7 +167,19 @@ public interface JdbcClient {
 		 * @return this statement specification (for chaining)
 		 * @see org.springframework.jdbc.core.namedparam.MapSqlParameterSource#addValue(String, Object, int)
 		 */
-		StatementSpec param(String name, Object value, int sqlType);
+		StatementSpec param(String name, @Nullable Object value, int sqlType);
+
+		/**
+		 * Bind a var-args list of positional parameters for "?" placeholder resolution.
+		 * <p>The given list will be added to existing positional parameters, if any.
+		 * Each element from the complete list will be bound as a JDBC positional
+		 * parameter with a corresponding JDBC index (i.e. list index + 1).
+		 * @param values the parameter values to bind
+		 * @return this statement specification (for chaining)
+		 * @see #param(Object)
+		 * @see #params(List)
+		 */
+		StatementSpec params(Object... values);
 
 		/**
 		 * Bind a list of positional parameters for "?" placeholder resolution.
@@ -190,11 +204,13 @@ public interface JdbcClient {
 		/**
 		 * Bind named statement parameters for ":x" placeholder resolution.
 		 * <p>The given parameter object will define all named parameters
-		 * based on its JavaBean properties, record components or raw fields.
+		 * based on its JavaBean properties, record components, or raw fields.
 		 * A Map instance can be provided as a complete parameter source as well.
-		 * @param namedParamObject a custom parameter object (e.g. a JavaBean or
-		 * record class) with named properties serving as statement parameters
+		 * @param namedParamObject a custom parameter object (e.g. a JavaBean,
+		 * record class, or field holder) with named properties serving as
+		 * statement parameters
 		 * @return this statement specification (for chaining)
+		 * @see #paramSource(SqlParameterSource)
 		 * @see org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 		 * @see org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource
 		 */
@@ -217,6 +233,19 @@ public interface JdbcClient {
 		 * @see java.sql.PreparedStatement#executeQuery()
 		 */
 		ResultQuerySpec query();
+
+		/**
+		 * Proceed towards execution of a mapped query, with several options
+		 * available in the returned query specification.
+		 * @param mappedClass the target class to apply a RowMapper for
+		 * (either a simple value type for a single column mapping or a
+		 * JavaBean / record class / field holder for a multi-column mapping)
+		 * @return the mapped query specification
+		 * @see #query(RowMapper)
+		 * @see org.springframework.jdbc.core.SingleColumnRowMapper
+		 * @see org.springframework.jdbc.core.SimplePropertyRowMapper
+		 */
+		<T> MappedQuerySpec<T> query(Class<T> mappedClass);
 
 		/**
 		 * Proceed towards execution of a mapped query, with several options
@@ -259,6 +288,16 @@ public interface JdbcClient {
 		 * @see java.sql.PreparedStatement#executeUpdate()
 		 */
 		int update(KeyHolder generatedKeyHolder);
+
+		/**
+		 * Execute the provided SQL statement as an update.
+		 * @param generatedKeyHolder a KeyHolder that will hold the generated keys
+		 * (typically a {@link org.springframework.jdbc.support.GeneratedKeyHolder})
+		 * @param keyColumnNames names of the columns that will have keys generated for them
+		 * @return the number of rows affected
+		 * @see java.sql.PreparedStatement#executeUpdate()
+		 */
+		int update(KeyHolder generatedKeyHolder, String... keyColumnNames);
 	}
 
 
@@ -294,18 +333,17 @@ public interface JdbcClient {
 		 * Retrieve a single column result,
 		 * retaining the order from the original database result.
 		 * @return a (potentially empty) list of rows, with each
-		 * row represented as a column value of the given type
+		 * row represented as its single column value
 		 */
-		<T> List<T> singleColumn(Class<T> requiredType);
+		List<Object> singleColumn();
 
 		/**
 		 * Retrieve a single value result.
-		 * @return the single row represented as its single
-		 * column value of the given type
+		 * @return the single row represented as its single column value
 		 * @see DataAccessUtils#requiredSingleResult(Collection)
 		 */
-		default <T> T singleValue(Class<T> requiredType) {
-			return DataAccessUtils.requiredSingleResult(singleColumn(requiredType));
+		default Object singleValue() {
+			return DataAccessUtils.requiredSingleResult(singleColumn());
 		}
 	}
 

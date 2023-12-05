@@ -6,6 +6,7 @@ including error handling. It includes the following topics:
 
 * xref:data-access/jdbc/core.adoc#jdbc-JdbcTemplate[Using `JdbcTemplate`]
 * xref:data-access/jdbc/core.adoc#jdbc-NamedParameterJdbcTemplate[Using `NamedParameterJdbcTemplate`]
+* xref:data-access/jdbc/core.adoc#jdbc-JdbcClient[Unified JDBC Query/Update Operations: `JdbcClient`]
 * xref:data-access/jdbc/core.adoc#jdbc-SQLExceptionTranslator[Using `SQLExceptionTranslator`]
 * xref:data-access/jdbc/core.adoc#jdbc-statements-executing[Running Statements]
 * xref:data-access/jdbc/core.adoc#jdbc-statements-querying[Running Queries]
@@ -50,7 +51,7 @@ corresponding to the fully qualified class name of the template instance (typica
 
 The following sections provide some examples of `JdbcTemplate` usage. These examples
 are not an exhaustive list of all of the functionality exposed by the `JdbcTemplate`.
-See the attendant {api-spring-framework}/jdbc/core/JdbcTemplate.html[javadoc] for that.
+See the attendant {spring-framework-api}/jdbc/core/JdbcTemplate.html[javadoc] for that.
 
 [[jdbc-JdbcTemplate-examples-query]]
 === Querying (`SELECT`)
@@ -501,8 +502,8 @@ extend from it, your sub-class inherits a `setDataSource(..)` method from the
 Regardless of which of the above template initialization styles you choose to use (or
 not), it is seldom necessary to create a new instance of a `JdbcTemplate` class each
 time you want to run SQL. Once configured, a `JdbcTemplate` instance is thread-safe.
-If your application accesses multiple
-databases, you may want multiple `JdbcTemplate` instances, which requires multiple `DataSources` and, subsequently, multiple differently
+If your application accesses multiple databases, you may want multiple `JdbcTemplate`
+instances, which requires multiple `DataSources` and, subsequently, multiple differently
 configured `JdbcTemplate` instances.
 
 
@@ -531,11 +532,8 @@ Java::
 	}
 
 	public int countOfActorsByFirstName(String firstName) {
-
-		String sql = "select count(*) from T_ACTOR where first_name = :first_name";
-
+		String sql = "select count(*) from t_actor where first_name = :first_name";
 		SqlParameterSource namedParameters = new MapSqlParameterSource("first_name", firstName);
-
 		return this.namedParameterJdbcTemplate.queryForObject(sql, namedParameters, Integer.class);
 	}
 ----
@@ -547,7 +545,7 @@ Kotlin::
 	private val namedParameterJdbcTemplate = NamedParameterJdbcTemplate(dataSource)
 
 	fun countOfActorsByFirstName(firstName: String): Int {
-		val sql = "select count(*) from T_ACTOR where first_name = :first_name"
+		val sql = "select count(*) from t_actor where first_name = :first_name"
 		val namedParameters = MapSqlParameterSource("first_name", firstName)
 		return namedParameterJdbcTemplate.queryForObject(sql, namedParameters, Int::class.java)!!
 	}
@@ -579,12 +577,9 @@ Java::
 	}
 
 	public int countOfActorsByFirstName(String firstName) {
-
-		String sql = "select count(*) from T_ACTOR where first_name = :first_name";
-
+		String sql = "select count(*) from t_actor where first_name = :first_name";
 		Map<String, String> namedParameters = Collections.singletonMap("first_name", firstName);
-
-		return this.namedParameterJdbcTemplate.queryForObject(sql, namedParameters,  Integer.class);
+		return this.namedParameterJdbcTemplate.queryForObject(sql, namedParameters, Integer.class);
 	}
 ----
 
@@ -596,7 +591,7 @@ Kotlin::
 	private val namedParameterJdbcTemplate = NamedParameterJdbcTemplate(dataSource)
 
 	fun countOfActorsByFirstName(firstName: String): Int {
-		val sql = "select count(*) from T_ACTOR where first_name = :first_name"
+		val sql = "select count(*) from t_actor where first_name = :first_name"
 		val namedParameters = mapOf("first_name" to firstName)
 		return namedParameterJdbcTemplate.queryForObject(sql, namedParameters, Int::class.java)!!
 	}
@@ -644,7 +639,6 @@ Java::
 		}
 
 		// setters omitted...
-
 	}
 ----
 
@@ -673,12 +667,9 @@ Java::
 	}
 
 	public int countOfActors(Actor exampleActor) {
-
 		// notice how the named parameters match the properties of the above 'Actor' class
-		String sql = "select count(*) from T_ACTOR where first_name = :firstName and last_name = :lastName";
-
+		String sql = "select count(*) from t_actor where first_name = :firstName and last_name = :lastName";
 		SqlParameterSource namedParameters = new BeanPropertySqlParameterSource(exampleActor);
-
 		return this.namedParameterJdbcTemplate.queryForObject(sql, namedParameters, Integer.class);
 	}
 ----
@@ -694,7 +685,7 @@ Kotlin::
 
 	fun countOfActors(exampleActor: Actor): Int {
 		// notice how the named parameters match the properties of the above 'Actor' class
-		val sql = "select count(*) from T_ACTOR where first_name = :firstName and last_name = :lastName"
+		val sql = "select count(*) from t_actor where first_name = :firstName and last_name = :lastName"
 		val namedParameters = BeanPropertySqlParameterSource(exampleActor)
 		return namedParameterJdbcTemplate.queryForObject(sql, namedParameters, Int::class.java)!!
 	}
@@ -707,8 +698,122 @@ functionality that is present only in the `JdbcTemplate` class, you can use the
 `getJdbcOperations()` method to access the wrapped `JdbcTemplate` through the
 `JdbcOperations` interface.
 
-See also xref:data-access/jdbc/core.adoc#jdbc-JdbcTemplate-idioms[`JdbcTemplate` Best Practices] for guidelines on using the
-`NamedParameterJdbcTemplate` class in the context of an application.
+See also xref:data-access/jdbc/core.adoc#jdbc-JdbcTemplate-idioms[`JdbcTemplate` Best Practices]
+for guidelines on using the `NamedParameterJdbcTemplate` class in the context of an application.
+
+
+[[jdbc-JdbcClient]]
+== Unified JDBC Query/Update Operations: `JdbcClient`
+
+As of 6.1, the named parameter statements of `NamedParameterJdbcTemplate` and the positional
+parameter statements of a regular `JdbcTemplate` are available through a unified client API
+with a fluent interaction model.
+
+For example, with positional parameters:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	private JdbcClient jdbcClient = JdbcClient.create(dataSource);
+
+	public int countOfActorsByFirstName(String firstName) {
+		return this.jdbcClient.sql("select count(*) from t_actor where first_name = ?")
+				.param(firstName);
+				.query(Integer.class).single();
+	}
+----
+
+For example, with named parameters:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	private JdbcClient jdbcClient = JdbcClient.create(dataSource);
+
+	public int countOfActorsByFirstName(String firstName) {
+		return this.jdbcClient.sql("select count(*) from t_actor where first_name = :firstName")
+				.param("firstName", firstName);
+				.query(Integer.class).single();
+	}
+----
+
+`RowMapper` capabilities are available as well, with flexible result resolution:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	List<Actor> actors = this.jdbcClient.sql("select first_name, last_name from t_actor")
+			.query((rs, rowNum) -> new Actor(rs.getString("first_name"), rs.getString("last_name")))
+			.list();
+----
+
+Instead of a custom `RowMapper`, you may also specify a class to map to.
+For example, assuming that `Actor` has `firstName` and `lastName` properties
+as a record class, a custom constructor, bean properties, or plain fields:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	List<Actor> actors = this.jdbcClient.sql("select first_name, last_name from t_actor")
+			.query(Actor.class)
+			.list();
+----
+
+With a required single object result:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	Actor actor = this.jdbcClient.sql("select first_name, last_name from t_actor where id = ?",
+			.param(1212L);
+			.query(Actor.class)
+			.single();
+----
+
+With a `java.util.Optional` result:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	Optional<Actor> actor = this.jdbcClient.sql("select first_name, last_name from t_actor where id = ?",
+			.param(1212L);
+			.query(Actor.class)
+			.optional();
+----
+
+And for an update statement:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	this.jdbcClient.sql("insert into t_actor (first_name, last_name) values (?, ?)")
+			.param("Leonor").param("Watling");
+			.update();
+----
+
+Or an update statement with named parameters:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	this.jdbcClient.sql("insert into t_actor (first_name, last_name) values (:firstName, :lastName)")
+			.param("firstName", "Leonor").param("lastName", "Watling");
+			.update();
+----
+
+Instead of individual named parameters, you may also specify a parameter source object –
+for example, a record class, a class with bean properties, or a plain field holder which
+provides `firstName` and `lastName` properties, such as the `Actor` class from above:
+
+[source,java,indent=0,subs="verbatim,quotes"]
+----
+	this.jdbcClient.sql("insert into t_actor (first_name, last_name) values (:firstName, :lastName)")
+			.paramSource(new Actor("Leonor", "Watling");
+			.update();
+----
+
+The automatic `Actor` class mapping for parameters as well as the query results above is
+provided through implicit `SimplePropertySqlParameterSource` and `SimplePropertyRowMapper`
+strategies which are also available for direct use. They can serve as a common replacement
+for `BeanPropertySqlParameterSource` and `BeanPropertyRowMapper`/`DataClassRowMapper`,
+also with `JdbcTemplate` and `NamedParameterJdbcTemplate` themselves.
+
+NOTE: `JdbcClient` is a flexible but simplified facade for JDBC query/update statements.
+Advanced capabilities such as batch inserts and stored procedure calls typically require
+extra customization: consider Spring's `SimpleJdbcInsert` and `SimpleJdbcCall` classes or
+plain direct `JdbcTemplate` usage for any such capabilities not available in `JdbcClient`.
 
 
 [[jdbc-SQLExceptionTranslator]]
@@ -719,7 +824,7 @@ between ``SQLException``s and Spring's own `org.springframework.dao.DataAccessEx
 which is agnostic in regard to data access strategy. Implementations can be generic (for
 example, using SQLState codes for JDBC) or proprietary (for example, using Oracle error
 codes) for greater precision. This exception translation mechanism is used behind the
-the common `JdbcTemplate` and `JdbcTransactionManager` entry points which do not
+common `JdbcTemplate` and `JdbcTransactionManager` entry points which do not
 propagate `SQLException` but rather `DataAccessException`.
 
 NOTE: As of 6.0, the default exception translator is `SQLExceptionSubclassTranslator`,

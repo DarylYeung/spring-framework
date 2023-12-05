@@ -136,13 +136,8 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
 
 	private final XmlValidationModeDetector validationModeDetector = new XmlValidationModeDetector();
 
-	private final ThreadLocal<Set<EncodedResource>> resourcesCurrentlyBeingLoaded =
-			new NamedThreadLocal<>("XML bean definition resources currently being loaded"){
-				@Override
-				protected Set<EncodedResource> initialValue() {
-					return new HashSet<>(4);
-				}
-			};
+	private final ThreadLocal<Set<EncodedResource>> resourcesCurrentlyBeingLoaded = NamedThreadLocal.withInitial(
+			"XML bean definition resources currently being loaded", () -> new HashSet<>(4));
 
 
 	/**
@@ -173,9 +168,9 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
 	 */
 	public void setValidationModeName(String validationModeName) {
 		Assert.hasText(validationModeName, "'validationModeName' must not be null or blank");
-		Integer mode = constants.get(validationModeName);
-		Assert.notNull(mode, "Only validation mode constants allowed");
-		setValidationMode(mode);
+		Integer validationMode = constants.get(validationModeName);
+		Assert.notNull(validationMode, "Only validation mode constants allowed");
+		this.validationMode = validationMode;
 	}
 
 	/**
@@ -185,6 +180,8 @@ public class XmlBeanDefinitionReader extends AbstractBeanDefinitionReader {
 	 * activate schema namespace support explicitly: see {@link #setNamespaceAware}.
 	 */
 	public void setValidationMode(int validationMode) {
+		Assert.isTrue(constants.containsValue(validationMode),
+				"Only values of validation mode constants allowed");
 		this.validationMode = validationMode;
 	}
 

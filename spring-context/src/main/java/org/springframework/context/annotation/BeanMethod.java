@@ -39,10 +39,16 @@ final class BeanMethod extends ConfigurationMethod {
 		super(metadata, configurationClass);
 	}
 
+
 	@Override
 	public void validate(ProblemReporter problemReporter) {
+		if ("void".equals(getMetadata().getReturnTypeName())) {
+			// declared as void: potential misuse of @Bean, maybe meant as init method instead?
+			problemReporter.error(new VoidDeclaredMethodError());
+		}
+
 		if (getMetadata().isStatic()) {
-			// static @Bean methods have no constraints to validate -> return immediately
+			// static @Bean methods have no further constraints to validate -> return immediately
 			return;
 		}
 
@@ -55,9 +61,8 @@ final class BeanMethod extends ConfigurationMethod {
 	}
 
 	@Override
-	public boolean equals(@Nullable Object obj) {
-		return (this == obj ||
-				(obj instanceof BeanMethod that && this.metadata.equals(that.metadata)));
+	public boolean equals(@Nullable Object other) {
+		return (this == other || (other instanceof BeanMethod that && this.metadata.equals(that.metadata)));
 	}
 
 	@Override
@@ -69,6 +74,16 @@ final class BeanMethod extends ConfigurationMethod {
 	public String toString() {
 		return "BeanMethod: " + this.metadata;
 	}
+
+
+	private class VoidDeclaredMethodError extends Problem {
+
+		VoidDeclaredMethodError() {
+			super("@Bean method '%s' must not be declared as void; change the method's return type or its annotation."
+					.formatted(getMetadata().getMethodName()), getResourceLocation());
+		}
+	}
+
 
 	private class NonOverridableMethodError extends Problem {
 

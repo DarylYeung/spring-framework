@@ -21,6 +21,8 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
@@ -38,9 +40,14 @@ import org.springframework.aot.generate.MethodReference.ArgumentCodeGenerator;
 import org.springframework.aot.hint.ExecutableMode;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.ReflectionHints;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.beans.factory.config.DependencyDescriptor;
+import org.springframework.beans.factory.support.AutowireCandidateResolver;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.InstanceSupplier;
 import org.springframework.beans.factory.support.RegisteredBean;
 import org.springframework.core.KotlinDetector;
+import org.springframework.core.MethodParameter;
 import org.springframework.core.ResolvableType;
 import org.springframework.javapoet.ClassName;
 import org.springframework.javapoet.CodeBlock;
@@ -51,9 +58,10 @@ import org.springframework.util.ClassUtils;
 import org.springframework.util.function.ThrowingSupplier;
 
 /**
- * Internal code generator to create an {@link InstanceSupplier}, usually in
+ * Default code generator to create an {@link InstanceSupplier}, usually in
  * the form of a {@link BeanInstanceSupplier} that retains the executable
- * that is used to instantiate the bean.
+ * that is used to instantiate the bean. Takes care of registering the
+ * necessary hints if reflection or a JDK proxy is required.
  *
  * <p>Generated code is usually a method reference that generates the
  * {@link BeanInstanceSupplier}, but some shortcut can be used as well such as:
@@ -66,8 +74,9 @@ import org.springframework.util.function.ThrowingSupplier;
  * @author Juergen Hoeller
  * @author Sebastien Deleuze
  * @since 6.0
+ * @see BeanRegistrationCodeFragments
  */
-class InstanceSupplierCodeGenerator {
+public class InstanceSupplierCodeGenerator {
 
 	private static final String REGISTERED_BEAN_PARAMETER_NAME = "registeredBean";
 
@@ -89,7 +98,15 @@ class InstanceSupplierCodeGenerator {
 	private final boolean allowDirectSupplierShortcut;
 
 
-	InstanceSupplierCodeGenerator(GenerationContext generationContext,
+	/**
+	 * Create a new instance.
+	 * @param generationContext the generation context
+	 * @param className the class name of the bean to instantiate
+	 * @param generatedMethods the generated methods
+	 * @param allowDirectSupplierShortcut whether a direct supplier may be used rather
+	 * than always needing an {@link InstanceSupplier}
+	 */
+	public InstanceSupplierCodeGenerator(GenerationContext generationContext,
 			ClassName className, GeneratedMethods generatedMethods, boolean allowDirectSupplierShortcut) {
 
 		this.generationContext = generationContext;
@@ -98,8 +115,14 @@ class InstanceSupplierCodeGenerator {
 		this.allowDirectSupplierShortcut = allowDirectSupplierShortcut;
 	}
 
-
-	CodeBlock generateCode(RegisteredBean registeredBean, Executable constructorOrFactoryMethod) {
+	/**
+	 * Generate the instance supplier code.
+	 * @param registeredBean the bean to handle
+	 * @param constructorOrFactoryMethod the executable to use to create the bean
+	 * @return the generated code
+	 */
+	public CodeBlock generateCode(RegisteredBean registeredBean, Executable constructorOrFactoryMethod) {
+		registerRuntimeHintsIfNecessary(registeredBean, constructorOrFactoryMethod);
 		if (constructorOrFactoryMethod instanceof Constructor<?> constructor) {
 			return generateCodeForConstructor(registeredBean, constructor);
 		}
@@ -108,6 +131,19 @@ class InstanceSupplierCodeGenerator {
 		}
 		throw new IllegalStateException(
 				"No suitable executor found for " + registeredBean.getBeanName());
+	}
+
+	private void registerRuntimeHintsIfNecessary(RegisteredBean registeredBean, Executable constructorOrFactoryMethod) {
+		if (registeredBean.getBeanFactory() instanceof DefaultListableBeanFactory dlbf) {
+			RuntimeHints runtimeHints = this.generationContext.getRuntimeHints();
+			ProxyRuntimeHintsRegistrar registrar = new ProxyRuntimeHintsRegistrar(dlbf.getAutowireCandidateResolver());
+			if (constructorOrFactoryMethod instanceof Method method) {
+				registrar.registerRuntimeHints(runtimeHints, method);
+			}
+			else if (constructorOrFactoryMethod instanceof Constructor<?> constructor) {
+				registrar.registerRuntimeHints(runtimeHints, constructor);
+			}
+		}
 	}
 
 	private CodeBlock generateCodeForConstructor(RegisteredBean registeredBean, Constructor<?> constructor) {
@@ -154,11 +190,15 @@ class InstanceSupplierCodeGenerator {
 	private CodeBlock generateCodeForInaccessibleConstructor(String beanName, Class<?> beanClass,
 			Constructor<?> constructor, boolean dependsOnBean, Consumer<ReflectionHints> hints) {
 
+		CodeWarnings codeWarnings = new CodeWarnings();
+		codeWarnings.detectDeprecation(beanClass, constructor)
+				.detectDeprecation(Arrays.stream(constructor.getParameters()).map(Parameter::getType));
 		hints.accept(this.generationContext.getRuntimeHints().reflection());
 
 		GeneratedMethod generatedMethod = generateGetInstanceSupplierMethod(method -> {
 			method.addJavadoc("Get the bean instance supplier for '$L'.", beanName);
 			method.addModifiers(PRIVATE_STATIC);
+			codeWarnings.suppress(method);
 			method.returns(ParameterizedTypeName.get(BeanInstanceSupplier.class, beanClass));
 			int parameterOffset = (!dependsOnBean) ? 0 : 1;
 			method.addStatement(generateResolverForConstructor(beanClass, constructor, parameterOffset));
@@ -171,8 +211,12 @@ class InstanceSupplierCodeGenerator {
 			String beanName, Class<?> beanClass, Constructor<?> constructor, Class<?> declaringClass,
 			boolean dependsOnBean, javax.lang.model.element.Modifier... modifiers) {
 
+		CodeWarnings codeWarnings = new CodeWarnings();
+		codeWarnings.detectDeprecation(beanClass, constructor, declaringClass)
+				.detectDeprecation(Arrays.stream(constructor.getParameters()).map(Parameter::getType));
 		method.addJavadoc("Get the bean instance supplier for '$L'.", beanName);
 		method.addModifiers(modifiers);
+		codeWarnings.suppress(method);
 		method.returns(ParameterizedTypeName.get(BeanInstanceSupplier.class, beanClass));
 
 		int parameterOffset = (!dependsOnBean) ? 0 : 1;
@@ -265,9 +309,13 @@ class InstanceSupplierCodeGenerator {
 
 		String factoryMethodName = factoryMethod.getName();
 		Class<?> suppliedType = ClassUtils.resolvePrimitiveIfNecessary(factoryMethod.getReturnType());
+		CodeWarnings codeWarnings = new CodeWarnings();
+		codeWarnings.detectDeprecation(declaringClass, factoryMethod, suppliedType)
+				.detectDeprecation(Arrays.stream(factoryMethod.getParameters()).map(Parameter::getType));
 
 		method.addJavadoc("Get the bean instance supplier for '$L'.", beanName);
 		method.addModifiers(modifiers);
+		codeWarnings.suppress(method);
 		method.returns(ParameterizedTypeName.get(BeanInstanceSupplier.class, suppliedType));
 
 		CodeBlock.Builder code = CodeBlock.builder();
@@ -370,6 +418,42 @@ class InstanceSupplierCodeGenerator {
 			return false;
 		}
 
+	}
+
+
+	private static class ProxyRuntimeHintsRegistrar {
+
+		private final AutowireCandidateResolver candidateResolver;
+
+		public ProxyRuntimeHintsRegistrar(AutowireCandidateResolver candidateResolver) {
+			this.candidateResolver = candidateResolver;
+		}
+
+		public void registerRuntimeHints(RuntimeHints runtimeHints, Method method) {
+			Class<?>[] parameterTypes = method.getParameterTypes();
+			for (int i = 0; i < parameterTypes.length; i++) {
+				MethodParameter methodParam = new MethodParameter(method, i);
+				DependencyDescriptor dependencyDescriptor = new DependencyDescriptor(methodParam, true);
+				registerProxyIfNecessary(runtimeHints, dependencyDescriptor);
+			}
+		}
+
+		public void registerRuntimeHints(RuntimeHints runtimeHints, Constructor<?> constructor) {
+			Class<?>[] parameterTypes = constructor.getParameterTypes();
+			for (int i = 0; i < parameterTypes.length; i++) {
+				MethodParameter methodParam = new MethodParameter(constructor, i);
+				DependencyDescriptor dependencyDescriptor = new DependencyDescriptor(
+						methodParam, true);
+				registerProxyIfNecessary(runtimeHints, dependencyDescriptor);
+			}
+		}
+
+		private void registerProxyIfNecessary(RuntimeHints runtimeHints, DependencyDescriptor dependencyDescriptor) {
+			Class<?> proxyType = this.candidateResolver.getLazyResolutionProxyClass(dependencyDescriptor, null);
+			if (proxyType != null && Proxy.isProxyClass(proxyType)) {
+				runtimeHints.proxies().registerJdkProxy(proxyType.getInterfaces());
+			}
+		}
 	}
 
 }

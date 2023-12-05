@@ -601,7 +601,7 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 		@Nullable
 		public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
 			switch (method.getName()) {
-				case "equals":
+				case "equals" -> {
 					Object other = args[0];
 					if (proxy == other) {
 						return true;
@@ -612,12 +612,15 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 					InvocationHandler otherHandler = Proxy.getInvocationHandler(other);
 					return (otherHandler instanceof SharedConnectionInvocationHandler sharedHandler &&
 							factory() == sharedHandler.factory());
-				case "hashCode":
+				}
+				case "hashCode" -> {
 					// Use hashCode of containing SingleConnectionFactory.
 					return System.identityHashCode(factory());
-				case "toString":
+				}
+				case "toString" -> {
 					return "Shared JMS Connection: " + getConnection();
-				case "setClientID":
+				}
+				case "setClientID" -> {
 					// Handle setClientID method: throw exception if not compatible.
 					String currentClientId = getConnection().getClientID();
 					if (currentClientId != null && currentClientId.equals(args[0])) {
@@ -628,7 +631,8 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 								"setClientID call not supported on proxy for shared Connection. " +
 								"Set the 'clientId' property on the SingleConnectionFactory instead.");
 					}
-				case "setExceptionListener":
+				}
+				case "setExceptionListener" -> {
 					// Handle setExceptionListener method: add to the chain.
 					synchronized (connectionMonitor) {
 						if (aggregatedExceptionListener != null) {
@@ -652,7 +656,8 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 									"which will allow for registering further ExceptionListeners to the recovery chain.");
 						}
 					}
-				case "getExceptionListener":
+				}
+				case "getExceptionListener" -> {
 					synchronized (connectionMonitor) {
 						if (this.localExceptionListener != null) {
 							return this.localExceptionListener;
@@ -661,13 +666,16 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 							return getExceptionListener();
 						}
 					}
-				case "start":
+				}
+				case "start" -> {
 					localStart();
 					return null;
-				case "stop":
+				}
+				case "stop" -> {
 					localStop();
 					return null;
-				case "close":
+				}
+				case "close" -> {
 					localStop();
 					synchronized (connectionMonitor) {
 						if (this.localExceptionListener != null) {
@@ -678,9 +686,8 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 						}
 					}
 					return null;
-				case "createSession":
-				case "createQueueSession":
-				case "createTopicSession":
+				}
+				case "createSession", "createQueueSession", "createTopicSession" -> {
 					// Default: JMS 2.0 createSession() method
 					Integer mode = Session.AUTO_ACKNOWLEDGE;
 					if (!ObjectUtils.isEmpty(args)) {
@@ -709,8 +716,8 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 						}
 						return session;
 					}
+				}
 			}
-
 			try {
 				return method.invoke(getConnection(), args);
 			}

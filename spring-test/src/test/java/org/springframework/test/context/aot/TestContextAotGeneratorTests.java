@@ -55,6 +55,7 @@ import org.springframework.test.context.aot.samples.web.WebSpringVintageTests;
 import org.springframework.test.context.aot.samples.xml.XmlSpringJupiterTests;
 import org.springframework.test.context.aot.samples.xml.XmlSpringTestNGTests;
 import org.springframework.test.context.aot.samples.xml.XmlSpringVintageTests;
+import org.springframework.test.context.env.YamlPropertySourceFactory;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.util.function.ThrowingConsumer;
 import org.springframework.web.context.WebApplicationContext;
@@ -158,6 +159,12 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 		assertReflectionRegistered(runtimeHints, AotTestAttributesCodeGenerator.GENERATED_ATTRIBUTES_CLASS_NAME, INVOKE_PUBLIC_METHODS);
 
 		Stream.of(
+			"org.opentest4j.TestAbortedException",
+			"org.junit.AssumptionViolatedException",
+			"org.testng.SkipException"
+		).forEach(type -> assertReflectionRegistered(runtimeHints, type));
+
+		Stream.of(
 			org.springframework.test.context.cache.DefaultCacheAwareContextLoaderDelegate.class,
 			org.springframework.test.context.support.DefaultBootstrapContext.class
 		).forEach(type -> assertReflectionRegistered(runtimeHints, type, INVOKE_PUBLIC_CONSTRUCTORS));
@@ -213,7 +220,19 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 
 		// @TestPropertySource(locations = ...)
 		assertThat(resource().forResource("org/springframework/test/context/aot/samples/basic/BasicSpringVintageTests.properties"))
+			.as("@TestPropertySource(locations)")
 			.accepts(runtimeHints);
+
+		// @YamlTestProperties(...)
+		assertThat(resource().forResource("org/springframework/test/context/aot/samples/basic/test1.yaml"))
+			.as("@YamlTestProperties: test1.yaml")
+			.accepts(runtimeHints);
+		assertThat(resource().forResource("org/springframework/test/context/aot/samples/basic/test2.yaml"))
+			.as("@YamlTestProperties: test2.yaml")
+			.accepts(runtimeHints);
+
+		// @TestPropertySource(factory = ...)
+		assertReflectionRegistered(runtimeHints, YamlPropertySourceFactory.class.getName(), INVOKE_DECLARED_CONSTRUCTORS);
 
 		// @WebAppConfiguration(value = ...)
 		assertThat(resource().forResource("META-INF/web-resources/resources/Spring.js")).accepts(runtimeHints);
@@ -223,6 +242,12 @@ class TestContextAotGeneratorTests extends AbstractAotTests {
 		assertThat(resource().forResource("org/springframework/test/context/jdbc/schema.sql"))
 			.accepts(runtimeHints);
 		assertThat(resource().forResource("org/springframework/test/context/aot/samples/jdbc/SqlScriptsSpringJupiterTests.test.sql"))
+			.accepts(runtimeHints);
+	}
+
+	private static void assertReflectionRegistered(RuntimeHints runtimeHints, String type) {
+		assertThat(reflection().onType(TypeReference.of(type)))
+			.as("Reflection hint for %s", type)
 			.accepts(runtimeHints);
 	}
 

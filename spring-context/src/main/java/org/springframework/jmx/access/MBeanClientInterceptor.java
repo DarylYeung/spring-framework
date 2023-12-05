@@ -348,7 +348,7 @@ public class MBeanClientInterceptor
 
 
 	/**
-	 * Route the invocation to the configured managed resource..
+	 * Route the invocation to the configured managed resource.
 	 * @param invocation the {@code MethodInvocation} to re-route
 	 * @return the value returned as a result of the re-routed invocation
 	 * @throws Throwable an invocation error propagated to the user
@@ -605,8 +605,8 @@ public class MBeanClientInterceptor
 	}
 
 	private Object convertDataArrayToTargetArray(Object[] array, Class<?> targetClass) throws NoSuchMethodException {
-		Class<?> targetType = targetClass.getComponentType();
-		Method fromMethod = targetType.getMethod("from", array.getClass().getComponentType());
+		Class<?> targetType = targetClass.componentType();
+		Method fromMethod = targetType.getMethod("from", array.getClass().componentType());
 		Object resultArray = Array.newInstance(targetType, array.length);
 		for (int i = 0; i < array.length; i++) {
 			Array.set(resultArray, i, ReflectionUtils.invokeMethod(fromMethod, null, array[i]));
@@ -617,7 +617,7 @@ public class MBeanClientInterceptor
 	private Collection<?> convertDataArrayToTargetCollection(Object[] array, Class<?> collectionType, Class<?> elementType)
 			throws NoSuchMethodException {
 
-		Method fromMethod = elementType.getMethod("from", array.getClass().getComponentType());
+		Method fromMethod = elementType.getMethod("from", array.getClass().componentType());
 		Collection<Object> resultColl = CollectionFactory.createCollection(collectionType, Array.getLength(array));
 		for (Object element : array) {
 			resultColl.add(ReflectionUtils.invokeMethod(fromMethod, null, element));

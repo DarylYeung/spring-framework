@@ -94,7 +94,6 @@ import org.springframework.web.method.support.HandlerMethodReturnValueHandler;
 import org.springframework.web.method.support.HandlerMethodReturnValueHandlerComposite;
 import org.springframework.web.method.support.InvocableHandlerMethod;
 import org.springframework.web.method.support.ModelAndViewContainer;
-import org.springframework.web.service.invoker.RequestParamArgumentResolver;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.mvc.annotation.ModelAndViewResolver;
@@ -135,7 +134,7 @@ public class RequestMappingHandlerAdapter extends AbstractHandlerMethodAdapter
 			(!AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class) &&
 					AnnotatedElementUtils.hasAnnotation(method, ModelAttribute.class));
 
-	private final static boolean BEAN_VALIDATION_PRESENT =
+	private static final boolean BEAN_VALIDATION_PRESENT =
 			ClassUtils.isPresent("jakarta.validation.Validator", HandlerMethod.class.getClassLoader());
 
 
@@ -577,7 +576,7 @@ public class RequestMappingHandlerAdapter extends AbstractHandlerMethodAdapter
 			this.methodValidator = HandlerMethodValidator.from(
 					this.webBindingInitializer, this.parameterNameDiscoverer,
 					methodParamPredicate(resolvers, ModelAttributeMethodProcessor.class),
-					methodParamPredicate(resolvers, RequestParamArgumentResolver.class));
+					methodParamPredicate(resolvers, RequestParamMethodArgumentResolver.class));
 		}
 	}
 
@@ -1050,7 +1049,7 @@ public class RequestMappingHandlerAdapter extends AbstractHandlerMethodAdapter
 
 		private static boolean taskExecutorWarning = true;
 
-		public MvcSimpleAsyncTaskExecutor() {
+		MvcSimpleAsyncTaskExecutor() {
 			super("MvcAsync");
 		}
 

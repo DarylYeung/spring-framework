@@ -262,7 +262,9 @@ public class ResolvableType implements Serializable {
 	 * @see #isAssignableFrom(ResolvableType)
 	 */
 	public boolean isAssignableFrom(Class<?> other) {
-		return isAssignableFrom(forClass(other), null);
+		// As of 6.1: shortcut assignability check for top-level Class references
+		return (this.type instanceof Class<?> clazz ? ClassUtils.isAssignable(clazz, other) :
+				isAssignableFrom(forClass(other), false, null));
 	}
 
 	/**
@@ -277,10 +279,10 @@ public class ResolvableType implements Serializable {
 	 * {@code ResolvableType}; {@code false} otherwise
 	 */
 	public boolean isAssignableFrom(ResolvableType other) {
-		return isAssignableFrom(other, null);
+		return isAssignableFrom(other, false, null);
 	}
 
-	private boolean isAssignableFrom(ResolvableType other, @Nullable Map<Type, Type> matchedBefore) {
+	private boolean isAssignableFrom(ResolvableType other, boolean strict, @Nullable Map<Type, Type> matchedBefore) {
 		Assert.notNull(other, "ResolvableType must not be null");
 
 		// If we cannot resolve types, we are not assignable
@@ -288,13 +290,21 @@ public class ResolvableType implements Serializable {
 			return false;
 		}
 
-		// Deal with array by delegating to the component type
-		if (isArray()) {
-			return (other.isArray() && getComponentType().isAssignableFrom(other.getComponentType()));
+		if (matchedBefore != null) {
+			if (matchedBefore.get(this.type) == other.type) {
+				return true;
+			}
+		}
+		else {
+			// As of 6.1: shortcut assignability check for top-level Class references
+			if (this.type instanceof Class<?> clazz && other.type instanceof Class<?> otherClazz) {
+				return (strict ? clazz.isAssignableFrom(otherClazz) : ClassUtils.isAssignable(clazz, otherClazz));
+			}
 		}
 
-		if (matchedBefore != null && matchedBefore.get(this.type) == other.type) {
-			return true;
+		// Deal with array by delegating to the component type
+		if (isArray()) {
+			return (other.isArray() && getComponentType().isAssignableFrom(other.getComponentType(), true, matchedBefore));
 		}
 
 		// Deal with wildcard bounds
@@ -340,13 +350,15 @@ public class ResolvableType implements Serializable {
 			}
 		}
 		if (ourResolved == null) {
-			ourResolved = resolve(Object.class);
+			ourResolved = toClass();
 		}
 		Class<?> otherResolved = other.toClass();
 
 		// We need an exact type match for generics
 		// List<CharSequence> is not assignable from List<String>
-		if (exactMatch ? !ourResolved.equals(otherResolved) : !ClassUtils.isAssignable(ourResolved, otherResolved)) {
+		if (exactMatch ? !ourResolved.equals(otherResolved) :
+				(strict ? !ourResolved.isAssignableFrom(otherResolved) :
+						!ClassUtils.isAssignable(ourResolved, otherResolved))) {
 			return false;
 		}
 
@@ -357,13 +369,15 @@ public class ResolvableType implements Serializable {
 			if (ourGenerics.length != typeGenerics.length) {
 				return false;
 			}
-			if (matchedBefore == null) {
-				matchedBefore = new IdentityHashMap<>(1);
-			}
-			matchedBefore.put(this.type, other.type);
-			for (int i = 0; i < ourGenerics.length; i++) {
-				if (!ourGenerics[i].isAssignableFrom(typeGenerics[i], matchedBefore)) {
-					return false;
+			if (ourGenerics.length > 0) {
+				if (matchedBefore == null) {
+					matchedBefore = new IdentityHashMap<>(1);
+				}
+				matchedBefore.put(this.type, other.type);
+				for (int i = 0; i < ourGenerics.length; i++) {
+					if (!ourGenerics[i].isAssignableFrom(typeGenerics[i], true, matchedBefore)) {
+						return false;
+					}
 				}
 			}
 		}
@@ -396,7 +410,7 @@ public class ResolvableType implements Serializable {
 			return this.componentType;
 		}
 		if (this.type instanceof Class<?> clazz) {
-			Class<?> componentType = clazz.getComponentType();
+			Class<?> componentType = clazz.componentType();
 			return forType(componentType, this.variableResolver);
 		}
 		if (this.type instanceof GenericArrayType genericArrayType) {
@@ -700,12 +714,12 @@ public class ResolvableType implements Serializable {
 	}
 
 	/**
-	 * Return an array of {@link ResolvableType ResolvableTypes} representing the generic parameters of
+	 * Return an array of {@code ResolvableType ResolvableTypes} representing the generic parameters of
 	 * this type. If no generics are available an empty array is returned. If you need to
 	 * access a specific generic consider using the {@link #getGeneric(int...)} method as
 	 * it allows access to nested generics and protects against
 	 * {@code IndexOutOfBoundsExceptions}.
-	 * @return an array of {@link ResolvableType ResolvableTypes} representing the generic parameters
+	 * @return an array of {@code ResolvableType ResolvableTypes} representing the generic parameters
 	 * (never {@code null})
 	 * @see #hasGenerics()
 	 * @see #getGeneric(int...)
@@ -744,7 +758,7 @@ public class ResolvableType implements Serializable {
 	 * Convenience method that will {@link #getGenerics() get} and
 	 * {@link #resolve() resolve} generic parameters.
 	 * @return an array of resolved generic parameters (the resulting array
-	 * will never be {@code null}, but it may contain {@code null} elements})
+	 * will never be {@code null}, but it may contain {@code null} elements)
 	 * @see #getGenerics()
 	 * @see #resolve()
 	 */
@@ -1373,8 +1387,8 @@ public class ResolvableType implements Serializable {
 	 */
 	public static ResolvableType forArrayComponent(ResolvableType componentType) {
 		Assert.notNull(componentType, "Component type must not be null");
-		Class<?> arrayClass = Array.newInstance(componentType.resolve(), 0).getClass();
-		return new ResolvableType(arrayClass, componentType, null, null);
+		Class<?> arrayType = componentType.resolve().arrayType();
+		return new ResolvableType(arrayType, componentType, null, null);
 	}
 
 	/**

@@ -354,6 +354,14 @@ public class RestTemplate extends InterceptingHttpAccessor implements RestOperat
 	}
 
 	/**
+	 * Return the configured {@link ObservationRegistry}.
+	 * @since 6.1
+	 */
+	public ObservationRegistry getObservationRegistry() {
+		return this.observationRegistry;
+	}
+
+	/**
 	 * Configure an {@link ObservationConvention} that sets the name of the
 	 * {@link Observation observation} as well as its {@link io.micrometer.common.KeyValues}
 	 * extracted from the {@link ClientRequestObservationContext}.
@@ -365,6 +373,15 @@ public class RestTemplate extends InterceptingHttpAccessor implements RestOperat
 	public void setObservationConvention(ClientRequestObservationConvention observationConvention) {
 		Assert.notNull(observationConvention, "observationConvention must not be null");
 		this.observationConvention = observationConvention;
+	}
+
+	/**
+	 * Return the configured {@link ClientRequestObservationConvention}, or {@code null} if not set.
+	 * @since 6.1
+	 */
+	@Nullable
+	public ClientRequestObservationConvention getObservationConvention() {
+		return this.observationConvention;
 	}
 
 	// GET

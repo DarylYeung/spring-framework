@@ -1011,7 +1011,7 @@ public abstract class AnnotationUtils {
 		}
 		if (value instanceof Annotation[] annotations) {
 			Annotation[] synthesized = (Annotation[]) Array.newInstance(
-					annotations.getClass().getComponentType(), annotations.length);
+					annotations.getClass().componentType(), annotations.length);
 			for (int i = 0; i < annotations.length; i++) {
 				synthesized[i] = MergedAnnotation.from(annotatedElement, annotations[i]).synthesize();
 			}
@@ -1292,7 +1292,7 @@ public abstract class AnnotationUtils {
 			return annotations;
 		}
 		Annotation[] synthesized = (Annotation[]) Array.newInstance(
-				annotations.getClass().getComponentType(), annotations.length);
+				annotations.getClass().componentType(), annotations.length);
 		for (int i = 0; i < annotations.length; i++) {
 			synthesized[i] = synthesizeAnnotation(annotations[i], annotatedElement);
 		}
@@ -1309,8 +1309,8 @@ public abstract class AnnotationUtils {
 	 */
 	public static boolean isSynthesizedAnnotation(@Nullable Annotation annotation) {
 		try {
-			return ((annotation != null) && Proxy.isProxyClass(annotation.getClass()) &&
-					(Proxy.getInvocationHandler(annotation) instanceof SynthesizedMergedAnnotationInvocationHandler));
+			return (annotation != null && Proxy.isProxyClass(annotation.getClass()) &&
+					Proxy.getInvocationHandler(annotation) instanceof SynthesizedMergedAnnotationInvocationHandler);
 		}
 		catch (SecurityException ex) {
 			// Security settings disallow reflective access to the InvocationHandler:
@@ -1326,6 +1326,9 @@ public abstract class AnnotationUtils {
 	public static void clearCache() {
 		AnnotationTypeMappings.clearCache();
 		AnnotationsScanner.clearCache();
+		AttributeMethods.cache.clear();
+		RepeatableContainers.cache.clear();
+		OrderUtils.orderCache.clear();
 	}
 
 

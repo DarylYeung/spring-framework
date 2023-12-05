@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2021 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -35,11 +36,13 @@ import org.springframework.util.StringUtils;
 
 /**
  * A generic implementation of the {@link CallMetaDataProvider} interface.
- * This class can be extended to provide database specific behavior.
+ *
+ * <p>This class can be extended to provide database specific behavior.
  *
  * @author Thomas Risberg
  * @author Juergen Hoeller
  * @author Sam Brannen
+ * @author Stephane Nicoll
  * @since 2.5
  */
 public class GenericCallMetaDataProvider implements CallMetaDataProvider {
@@ -113,7 +116,7 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 			@Nullable String schemaName, @Nullable String procedureName) throws SQLException {
 
 		this.procedureColumnMetaDataUsed = true;
-		processProcedureColumns(databaseMetaData, catalogName, schemaName,  procedureName);
+		processProcedureColumns(databaseMetaData, catalogName, schemaName, procedureName);
 	}
 
 	@Override
@@ -124,52 +127,19 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 	@Override
 	@Nullable
 	public String procedureNameToUse(@Nullable String procedureName) {
-		if (procedureName == null) {
-			return null;
-		}
-		else if (isStoresUpperCaseIdentifiers()) {
-			return procedureName.toUpperCase();
-		}
-		else if (isStoresLowerCaseIdentifiers()) {
-			return procedureName.toLowerCase();
-		}
-		else {
-			return procedureName;
-		}
+		return identifierNameToUse(procedureName);
 	}
 
 	@Override
 	@Nullable
 	public String catalogNameToUse(@Nullable String catalogName) {
-		if (catalogName == null) {
-			return null;
-		}
-		else if (isStoresUpperCaseIdentifiers()) {
-			return catalogName.toUpperCase();
-		}
-		else if (isStoresLowerCaseIdentifiers()) {
-			return catalogName.toLowerCase();
-		}
-		else {
-			return catalogName;
-		}
+		return identifierNameToUse(catalogName);
 	}
 
 	@Override
 	@Nullable
 	public String schemaNameToUse(@Nullable String schemaName) {
-		if (schemaName == null) {
-			return null;
-		}
-		else if (isStoresUpperCaseIdentifiers()) {
-			return schemaName.toUpperCase();
-		}
-		else if (isStoresLowerCaseIdentifiers()) {
-			return schemaName.toLowerCase();
-		}
-		else {
-			return schemaName;
-		}
+		return identifierNameToUse(schemaName);
 	}
 
 	@Override
@@ -197,18 +167,7 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 	@Override
 	@Nullable
 	public String parameterNameToUse(@Nullable String parameterName) {
-		if (parameterName == null) {
-			return null;
-		}
-		else if (isStoresUpperCaseIdentifiers()) {
-			return parameterName.toUpperCase();
-		}
-		else if (isStoresLowerCaseIdentifiers()) {
-			return parameterName.toLowerCase();
-		}
-		else {
-			return parameterName;
-		}
+		return identifierNameToUse(parameterName);
 	}
 
 	@Override
@@ -316,6 +275,22 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 	}
 
 
+	@Nullable
+	private String identifierNameToUse(@Nullable String identifierName) {
+		if (identifierName == null) {
+			return null;
+		}
+		else if (isStoresUpperCaseIdentifiers()) {
+			return identifierName.toUpperCase();
+		}
+		else if (isStoresLowerCaseIdentifiers()) {
+			return identifierName.toLowerCase();
+		}
+		else {
+			return identifierName;
+		}
+	}
+
 	/**
 	 * Process the procedure column meta-data.
 	 */
@@ -325,17 +300,24 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 		String metaDataCatalogName = metaDataCatalogNameToUse(catalogName);
 		String metaDataSchemaName = metaDataSchemaNameToUse(schemaName);
 		String metaDataProcedureName = procedureNameToUse(procedureName);
-		if (logger.isDebugEnabled()) {
-			logger.debug("Retrieving meta-data for " + metaDataCatalogName + '/' +
-					metaDataSchemaName + '/' + metaDataProcedureName);
-		}
-
 		try {
+			String searchStringEscape = databaseMetaData.getSearchStringEscape();
+			String escapedSchemaName = escapeNamePattern(metaDataSchemaName, searchStringEscape);
+			String escapedProcedureName = escapeNamePattern(metaDataProcedureName, searchStringEscape);
+			if (logger.isDebugEnabled()) {
+				String schemaInfo = (Objects.equals(escapedSchemaName, metaDataSchemaName)
+						? metaDataSchemaName : metaDataCatalogName + "(" + escapedSchemaName + ")");
+				String procedureInfo = (Objects.equals(escapedProcedureName, metaDataProcedureName)
+						? metaDataProcedureName : metaDataProcedureName + "(" + escapedProcedureName + ")");
+				logger.debug("Retrieving meta-data for " + metaDataCatalogName + '/' +
+						schemaInfo + '/' + procedureInfo);
+			}
+
 			List<String> found = new ArrayList<>();
 			boolean function = false;
 
 			try (ResultSet procedures = databaseMetaData.getProcedures(
-					metaDataCatalogName, metaDataSchemaName, metaDataProcedureName)) {
+					metaDataCatalogName, escapedSchemaName, escapedProcedureName)) {
 				while (procedures.next()) {
 					found.add(procedures.getString("PROCEDURE_CAT") + '.' + procedures.getString("PROCEDURE_SCHEM") +
 							'.' + procedures.getString("PROCEDURE_NAME"));
@@ -345,7 +327,7 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 			if (found.isEmpty()) {
 				// Functions not exposed as procedures anymore on PostgreSQL driver 42.2.11
 				try (ResultSet functions = databaseMetaData.getFunctions(
-						metaDataCatalogName, metaDataSchemaName, metaDataProcedureName)) {
+						metaDataCatalogName, escapedSchemaName, escapedProcedureName)) {
 					while (functions.next()) {
 						found.add(functions.getString("FUNCTION_CAT") + '.' + functions.getString("FUNCTION_SCHEM") +
 								'.' + functions.getString("FUNCTION_NAME"));
@@ -386,8 +368,8 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 						metaDataCatalogName + '/' + metaDataSchemaName + '/' + metaDataProcedureName);
 			}
 			try (ResultSet columns = function ?
-					databaseMetaData.getFunctionColumns(metaDataCatalogName, metaDataSchemaName, metaDataProcedureName, null) :
-					databaseMetaData.getProcedureColumns(metaDataCatalogName, metaDataSchemaName, metaDataProcedureName, null)) {
+					databaseMetaData.getFunctionColumns(metaDataCatalogName, escapedSchemaName, escapedProcedureName, null) :
+					databaseMetaData.getProcedureColumns(metaDataCatalogName, escapedSchemaName, escapedProcedureName, null)) {
 				while (columns.next()) {
 					String columnName = columns.getString("COLUMN_NAME");
 					int columnType = columns.getInt("COLUMN_TYPE");
@@ -425,6 +407,16 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 			// not to do that here, since invocation of the stored procedure will
 			// likely fail anyway with an incorrect argument list.
 		}
+	}
+
+	@Nullable
+	private static String escapeNamePattern(@Nullable String name, @Nullable String escape) {
+		if (name == null || escape == null) {
+			return name;
+		}
+		return name.replace(escape, escape + escape)
+					.replace("_", escape + "_")
+					.replace("%", escape + "%");
 	}
 
 	private static boolean isInOrOutColumn(int columnType, boolean function) {

@@ -211,8 +211,8 @@ class ConfigurationClassParser {
 	}
 
 	List<PropertySourceDescriptor> getPropertySourceDescriptors() {
-		return (this.propertySourceRegistry != null ? this.propertySourceRegistry.getDescriptors()
-				: Collections.emptyList());
+		return (this.propertySourceRegistry != null ? this.propertySourceRegistry.getDescriptors() :
+				Collections.emptyList());
 	}
 
 	protected void processConfigurationClass(ConfigurationClass configClass, Predicate<String> filter) throws IOException {
@@ -238,11 +238,18 @@ class ConfigurationClassParser {
 		}
 
 		// Recursively process the configuration class and its superclass hierarchy.
-		SourceClass sourceClass = asSourceClass(configClass, filter);
-		do {
-			sourceClass = doProcessConfigurationClass(configClass, sourceClass, filter);
+		SourceClass sourceClass = null;
+		try {
+			sourceClass = asSourceClass(configClass, filter);
+			do {
+				sourceClass = doProcessConfigurationClass(configClass, sourceClass, filter);
+			}
+			while (sourceClass != null);
 		}
-		while (sourceClass != null);
+		catch (IOException ex) {
+			throw new BeanDefinitionStoreException(
+					"I/O failure while processing configuration class [" + sourceClass + "]", ex);
+		}
 
 		this.configurationClasses.put(configClass, configClass);
 	}
@@ -267,8 +274,8 @@ class ConfigurationClassParser {
 
 		// Process any @PropertySource annotations
 		for (AnnotationAttributes propertySource : AnnotationConfigUtils.attributesForRepeatable(
-				sourceClass.getMetadata(), PropertySources.class,
-				org.springframework.context.annotation.PropertySource.class)) {
+				sourceClass.getMetadata(), org.springframework.context.annotation.PropertySource.class,
+				PropertySources.class, true)) {
 			if (this.propertySourceRegistry != null) {
 				this.propertySourceRegistry.processPropertySource(propertySource);
 			}
@@ -280,7 +287,7 @@ class ConfigurationClassParser {
 
 		// Process any @ComponentScan annotations
 		Set<AnnotationAttributes> componentScans = AnnotationConfigUtils.attributesForRepeatable(
-				sourceClass.getMetadata(), ComponentScans.class, ComponentScan.class);
+				sourceClass.getMetadata(), ComponentScan.class, ComponentScans.class);
 		if (!componentScans.isEmpty() &&
 				!this.conditionEvaluator.shouldSkip(sourceClass.getMetadata(), ConfigurationPhase.REGISTER_BEAN)) {
 			for (AnnotationAttributes componentScan : componentScans) {
@@ -403,11 +410,14 @@ class ConfigurationClassParser {
 						this.metadataReaderFactory.getMetadataReader(original.getClassName()).getAnnotationMetadata();
 				Set<MethodMetadata> asmMethods = asm.getAnnotatedMethods(Bean.class.getName());
 				if (asmMethods.size() >= beanMethods.size()) {
+					Set<MethodMetadata> candidateMethods = new LinkedHashSet<>(beanMethods);
 					Set<MethodMetadata> selectedMethods = new LinkedHashSet<>(asmMethods.size());
 					for (MethodMetadata asmMethod : asmMethods) {
-						for (MethodMetadata beanMethod : beanMethods) {
+						for (Iterator<MethodMetadata> it = candidateMethods.iterator(); it.hasNext();) {
+							MethodMetadata beanMethod = it.next();
 							if (beanMethod.getMethodName().equals(asmMethod.getMethodName())) {
 								selectedMethods.add(beanMethod);
+								it.remove();
 								break;
 							}
 						}
@@ -1002,8 +1012,8 @@ class ConfigurationClassParser {
 		}
 
 		@Override
-		public boolean equals(@Nullable Object obj) {
-			return (this == obj || (obj instanceof SourceClass that &&
+		public boolean equals(@Nullable Object other) {
+			return (this == other || (other instanceof SourceClass that &&
 					this.metadata.getClassName().equals(that.metadata.getClassName())));
 		}
 

@@ -27,6 +27,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import io.micrometer.observation.ObservationRegistry;
+
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -40,6 +42,7 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpRequestInitializer;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.http.client.observation.ClientRequestObservationConvention;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.lang.Nullable;
 import org.springframework.web.util.DefaultUriBuilderFactory;
@@ -48,7 +51,7 @@ import org.springframework.web.util.UriBuilderFactory;
 
 /**
  * Client to perform HTTP requests, exposing a fluent, synchronous API over
- * underlying HTTP client libraries such the JDK {@code HttpClient}, Apache
+ * underlying HTTP client libraries such as the JDK {@code HttpClient}, Apache
  * HttpComponents, and others.
  *
  * <p>Use static factory methods {@link #create()}, {@link #create(String)},
@@ -125,7 +128,7 @@ public interface RestClient {
 
 	/**
 	 * Return a builder to create a new {@code RestClient} whose settings are
-	 * replicated from the current {@code RestClient}.
+	 * replicated from this {@code RestClient}.
 	 */
 	Builder mutate();
 
@@ -365,6 +368,24 @@ public interface RestClient {
 		Builder messageConverters(Consumer<List<HttpMessageConverter<?>>> configurer);
 
 		/**
+		 * Configure the {@link io.micrometer.observation.ObservationRegistry} to use
+		 * for recording HTTP client observations.
+		 * @param observationRegistry the observation registry to use
+		 * @return this builder
+		 */
+		Builder observationRegistry(ObservationRegistry observationRegistry);
+
+		/**
+		 * Configure the {@link io.micrometer.observation.ObservationConvention} to use
+		 * for collecting metadata for the request observation. Will use
+		 * {@link org.springframework.http.client.observation.DefaultClientRequestObservationConvention}
+		 * if none provided.
+		 * @param observationConvention the observation convention to use
+		 * @return this builder
+		 */
+		Builder observationConvention(ClientRequestObservationConvention observationConvention);
+
+		/**
 		 * Apply the given {@code Consumer} to this builder instance.
 		 * <p>This can be useful for applying pre-packaged customizations.
 		 * @param builderConsumer the consumer to apply
@@ -447,8 +468,6 @@ public interface RestClient {
 
 		/**
 		 * Set the value of the {@code If-Modified-Since} header.
-		 * <p>The date should be specified as the number of milliseconds since
-		 * January 1, 1970 GMT.
 		 * @param ifModifiedSince the new value of the header
 		 * @return this builder
 		 */
@@ -476,22 +495,6 @@ public interface RestClient {
 		 * @return this builder
 		 */
 		S headers(Consumer<HttpHeaders> headersConsumer);
-
-		/**
-		 * Set the attribute with the given name to the given value.
-		 * @param name the name of the attribute to add
-		 * @param value the value of the attribute to add
-		 * @return this builder
-		 */
-		S attribute(String name, Object value);
-
-		/**
-		 * Provides access to every attribute declared so far with the
-		 * possibility to add, replace, or remove values.
-		 * @param attributesConsumer the consumer to provide access to
-		 * @return this builder
-		 */
-		S attributes(Consumer<Map<String, Object>> attributesConsumer);
 
 		/**
 		 * Callback for access to the {@link ClientHttpRequest} that in turn
@@ -602,7 +605,33 @@ public interface RestClient {
 			 * @return the exchanged type
 			 * @throws IOException in case of I/O errors
 			 */
-			T exchange(HttpRequest clientRequest, ClientHttpResponse clientResponse) throws IOException;
+			T exchange(HttpRequest clientRequest, ConvertibleClientHttpResponse clientResponse) throws IOException;
+		}
+
+
+		/**
+		 * Extension of {@link ClientHttpResponse} that can convert the body.
+		 */
+		interface ConvertibleClientHttpResponse extends ClientHttpResponse {
+
+			/**
+			 * Extract the response body as an object of the given type.
+			 * @param bodyType the type of return value
+			 * @param <T> the body type
+			 * @return the body, or {@code null} if no response body was available
+			 */
+			@Nullable
+			<T> T bodyTo(Class<T> bodyType);
+
+			/**
+			 * Extract the response body as an object of the given type.
+			 * @param bodyType the type of return value
+			 * @param <T> the body type
+			 * @return the body, or {@code null} if no response body was available
+			 */
+			@Nullable
+			<T> T bodyTo(ParameterizedTypeReference<T> bodyType);
+
 		}
 	}
 
@@ -642,26 +671,26 @@ public interface RestClient {
 		 *     .retrieve()
 		 *     .toBodilessEntity();
 		 * </pre>
-		 * @param body the body of the response
-		 * @return the built response
+		 * @param body the body of the request
+		 * @return this builder
 		 */
 		RequestBodySpec body(Object body);
 
 		/**
-		 * Set the body of the response to the given {@code Object}.
+		 * Set the body of the request to the given {@code Object}.
 		 * The parameter {@code bodyType} is used to capture the generic type.
-		 * @param body the body of the response
+		 * @param body the body of the request
 		 * @param bodyType the type of the body, used to capture the generic type
-		 * @return the built response
+		 * @return this builder
 		 */
 		<T> RequestBodySpec body(T body, ParameterizedTypeReference<T> bodyType);
 
 		/**
-		 * Set the body of the response to the given function that writes to
+		 * Set the body of the request to the given function that writes to
 		 * an {@link OutputStream}.
 		 * @param body a function that takes an {@code OutputStream} and can
 		 * throw an {@code IOException}
-		 * @return the built response
+		 * @return this builder
 		 */
 		RequestBodySpec body(StreamingHttpOutputMessage.Body body);
 	}

@@ -40,16 +40,22 @@ import org.springframework.util.Assert;
 
 /**
  * A powerful and highly configurable {@link EvaluationContext} implementation.
- * This context uses standard implementations of all applicable strategies,
- * based on reflection to resolve properties, methods and fields.
  *
- * <p>For a simpler builder-style context variant for data-binding purposes,
+ * <p>This context uses standard implementations of all applicable strategies,
+ * based on reflection to resolve properties, methods, and fields. Note, however,
+ * that you may need to manually configure a {@code StandardTypeLocator} with a
+ * specific {@link ClassLoader} to ensure that the SpEL expression parser is able
+ * to reliably locate user types. See {@link #setTypeLocator(TypeLocator)} for
+ * details.
+ *
+ * <p>For a simpler, builder-style context variant for data-binding purposes,
  * consider using {@link SimpleEvaluationContext} instead which allows for
- * opting into several SpEL features as needed by specific evaluation cases.
+ * opting into several SpEL features as needed by specific use cases.
  *
  * @author Andy Clement
  * @author Juergen Hoeller
  * @author Sam Brannen
+ * @author Stephane Nicoll
  * @since 3.0
  * @see SimpleEvaluationContext
  * @see ReflectivePropertyAccessor
@@ -85,9 +91,9 @@ public class StandardEvaluationContext implements EvaluationContext {
 	@Nullable
 	private TypeConverter typeConverter;
 
-	private TypeComparator typeComparator = new StandardTypeComparator();
+	private TypeComparator typeComparator = StandardTypeComparator.INSTANCE;
 
-	private OperatorOverloader operatorOverloader = new StandardOperatorOverloader();
+	private OperatorOverloader operatorOverloader = StandardOperatorOverloader.INSTANCE;
 
 	private final Map<String, Object> variables = new ConcurrentHashMap<>();
 
@@ -183,11 +189,29 @@ public class StandardEvaluationContext implements EvaluationContext {
 		return this.beanResolver;
 	}
 
+	/**
+	 * Set the {@link TypeLocator} to use to find types, either by short or
+	 * fully-qualified name.
+	 * <p>By default, a {@link StandardTypeLocator} will be used.
+	 * <p><strong>NOTE</strong>: Even if a {@code StandardTypeLocator} is
+	 * sufficient, you may need to manually configure a {@code StandardTypeLocator}
+	 * with a specific {@link ClassLoader} to ensure that the SpEL expression
+	 * parser is able to reliably locate user types.
+	 * @param typeLocator the {@code TypeLocator} to use
+	 * @see StandardTypeLocator#StandardTypeLocator(ClassLoader)
+	 * @see #getTypeLocator()
+	 */
 	public void setTypeLocator(TypeLocator typeLocator) {
 		Assert.notNull(typeLocator, "TypeLocator must not be null");
 		this.typeLocator = typeLocator;
 	}
 
+	/**
+	 * Get the configured {@link TypeLocator} that will be used to find types,
+	 * either by short or fully-qualified name.
+	 * <p>See {@link #setTypeLocator(TypeLocator)} for further details.
+	 * @see #setTypeLocator(TypeLocator)
+	 */
 	@Override
 	public TypeLocator getTypeLocator() {
 		if (this.typeLocator == null) {
@@ -304,6 +328,29 @@ public class StandardEvaluationContext implements EvaluationContext {
 					"Method filter cannot be set as the reflective method resolver is not in use");
 		}
 		resolver.registerMethodFilter(type, filter);
+	}
+
+	/**
+	 * Apply the internal delegates of this instance to the specified
+	 * {@code evaluationContext}. Typically invoked right after the new context
+	 * instance has been created to reuse the delegates. Do not modify the
+	 * {@linkplain #setRootObject(Object) root object} or any registered
+	 * {@linkplain #setVariables(Map) variables}.
+	 * @param evaluationContext the evaluation context to update
+	 * @since 6.1.1
+	 */
+	public void applyDelegatesTo(StandardEvaluationContext evaluationContext) {
+		// Triggers initialization for default delegates
+		evaluationContext.setConstructorResolvers(new ArrayList<>(this.getConstructorResolvers()));
+		evaluationContext.setMethodResolvers(new ArrayList<>(this.getMethodResolvers()));
+		evaluationContext.setPropertyAccessors(new ArrayList<>(this.getPropertyAccessors()));
+		evaluationContext.setTypeLocator(this.getTypeLocator());
+		evaluationContext.setTypeConverter(this.getTypeConverter());
+
+		evaluationContext.beanResolver = this.beanResolver;
+		evaluationContext.operatorOverloader = this.operatorOverloader;
+		evaluationContext.reflectiveMethodResolver = this.reflectiveMethodResolver;
+		evaluationContext.typeComparator = this.typeComparator;
 	}
 
 

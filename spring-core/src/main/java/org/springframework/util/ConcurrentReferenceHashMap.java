@@ -56,6 +56,7 @@ import org.springframework.lang.Nullable;
  *
  * @author Phillip Webb
  * @author Juergen Hoeller
+ * @author Brian Clozel
  * @since 3.2
  * @param <K> the key type
  * @param <V> the value type
@@ -316,7 +317,7 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 	}
 
 	@Override
-	public boolean remove(@Nullable Object key, final @Nullable Object value) {
+	public boolean remove(@Nullable Object key, @Nullable final Object value) {
 		Boolean result = doTask(key, new Task<Boolean>(TaskOption.RESTRUCTURE_AFTER, TaskOption.SKIP_IF_EMPTY) {
 			@Override
 			protected Boolean execute(@Nullable Reference<K, V> ref, @Nullable Entry<K, V> entry) {
@@ -333,7 +334,7 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 	}
 
 	@Override
-	public boolean replace(@Nullable K key, final @Nullable V oldValue, final @Nullable V newValue) {
+	public boolean replace(@Nullable K key, @Nullable final V oldValue, @Nullable final V newValue) {
 		Boolean result = doTask(key, new Task<Boolean>(TaskOption.RESTRUCTURE_BEFORE, TaskOption.SKIP_IF_EMPTY) {
 			@Override
 			protected Boolean execute(@Nullable Reference<K, V> ref, @Nullable Entry<K, V> entry) {
@@ -349,7 +350,7 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 
 	@Override
 	@Nullable
-	public V replace(@Nullable K key, final @Nullable V value) {
+	public V replace(@Nullable K key, @Nullable final V value) {
 		return doTask(key, new Task<V>(TaskOption.RESTRUCTURE_BEFORE, TaskOption.SKIP_IF_EMPTY) {
 			@Override
 			@Nullable
@@ -568,7 +569,7 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 		 * references that have been garbage collected.
 		 * @param allowResize if resizing is permitted
 		 */
-		protected final void restructureIfNecessary(boolean allowResize) {
+		void restructureIfNecessary(boolean allowResize) {
 			int currCount = this.count.get();
 			boolean needsResize = allowResize && (currCount > 0 && currCount >= this.resizeThreshold);
 			Reference<K, V> ref = this.referenceManager.pollForPurge();
@@ -581,7 +582,7 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 			boolean needsResize;
 			lock();
 			try {
-				int countAfterRestructure = this.count.get();
+				int expectedCount = this.count.get();
 				Set<Reference<K, V>> toPurge = Collections.emptySet();
 				if (ref != null) {
 					toPurge = new HashSet<>();
@@ -590,11 +591,11 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 						ref = this.referenceManager.pollForPurge();
 					}
 				}
-				countAfterRestructure -= toPurge.size();
+				expectedCount -= toPurge.size();
 
-				// Recalculate taking into account count inside lock and items that
-				// will be purged
-				needsResize = (countAfterRestructure > 0 && countAfterRestructure >= this.resizeThreshold);
+				// Estimate new count, taking into account count inside lock and items that
+				// will be purged.
+				needsResize = (expectedCount > 0 && expectedCount >= this.resizeThreshold);
 				boolean resizing = false;
 				int restructureSize = this.references.length;
 				if (allowResize && needsResize && restructureSize < MAXIMUM_SEGMENT_SIZE) {
@@ -607,6 +608,7 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 						(resizing ? createReferenceArray(restructureSize) : this.references);
 
 				// Restructure
+				int newCount = 0;
 				for (int i = 0; i < this.references.length; i++) {
 					ref = this.references[i];
 					if (!resizing) {
@@ -615,10 +617,13 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 					while (ref != null) {
 						if (!toPurge.contains(ref)) {
 							Entry<K, V> entry = ref.get();
+							// Also filter out null references that are now null
+							// they should be polled the queue in a later restructure call.
 							if (entry != null) {
 								int index = getIndex(ref.getHash(), restructured);
 								restructured[index] = this.referenceManager.createReference(
 										entry, ref.getHash(), restructured[index]);
+								newCount++;
 							}
 						}
 						ref = ref.getNext();
@@ -630,7 +635,7 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 					this.references = restructured;
 					this.resizeThreshold = (int) (this.references.length * getLoadFactor());
 				}
-				this.count.set(Math.max(countAfterRestructure, 0));
+				this.count.set(Math.max(newCount, 0));
 			}
 			finally {
 				unlock();
@@ -667,14 +672,14 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
 		/**
 		 * Return the size of the current references array.
 		 */
-		public final int getSize() {
+		public int getSize() {
 			return this.references.length;
 		}
 
 		/**
 		 * Return the total number of references in this segment.
 		 */
-		public final int getCount() {
+		public int getCount() {
 			return this.count.get();
 		}
 	}

@@ -81,7 +81,7 @@ public final class ConcurrentLruCache<K, V> {
 	}
 
 	private ConcurrentLruCache(int capacity, Function<K, V> generator, int concurrencyLevel) {
-		Assert.isTrue(capacity > 0, "Capacity must be > 0");
+		Assert.isTrue(capacity >= 0, "Capacity must be >= 0");
 		this.capacity = capacity;
 		this.cache = new ConcurrentHashMap<>(16, 0.75f, concurrencyLevel);
 		this.generator = generator;
@@ -95,6 +95,9 @@ public final class ConcurrentLruCache<K, V> {
 	 * @return the cached or newly generated value
 	 */
 	public V get(K key) {
+		if (this.capacity == 0) {
+			return this.generator.apply(key);
+		}
 		final Node<K, V> node = this.cache.get(key);
 		if (node == null) {
 			V value = this.generator.apply(key);
@@ -393,7 +396,6 @@ public final class ConcurrentLruCache<K, V> {
 
 		private final EvictionQueue<K, V> evictionQueue;
 
-		@SuppressWarnings("rawtypes")
 		ReadOperations(EvictionQueue<K, V> evictionQueue) {
 			this.evictionQueue = evictionQueue;
 			for (int i = 0; i < BUFFER_COUNT; i++) {

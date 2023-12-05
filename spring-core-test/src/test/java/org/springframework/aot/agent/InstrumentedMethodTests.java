@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2022 the original author or authors.
+ * Copyright 2002-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -408,15 +408,15 @@ class InstrumentedMethodTests {
 		}
 
 		@Test
-		void classGetMethodShouldMatchIntrospectDeclaredMethodsHint() {
+		void classGetMethodShouldNotMatchIntrospectDeclaredMethodsHint() {
 			hints.reflection().registerType(String.class, MemberCategory.INTROSPECT_DECLARED_METHODS);
-			assertThatInvocationMatches(InstrumentedMethod.CLASS_GETMETHOD, this.stringGetToStringMethod);
+			assertThatInvocationDoesNotMatch(InstrumentedMethod.CLASS_GETMETHOD, this.stringGetToStringMethod);
 		}
 
 		@Test
-		void classGetMethodShouldMatchInvokeDeclaredMethodsHint() {
+		void classGetMethodShouldNotMatchInvokeDeclaredMethodsHint() {
 			hints.reflection().registerType(String.class, MemberCategory.INVOKE_DECLARED_METHODS);
-			assertThatInvocationMatches(InstrumentedMethod.CLASS_GETMETHOD, this.stringGetToStringMethod);
+			assertThatInvocationDoesNotMatch(InstrumentedMethod.CLASS_GETMETHOD, this.stringGetToStringMethod);
 		}
 
 		@Test
@@ -544,9 +544,9 @@ class InstrumentedMethodTests {
 		}
 
 		@Test
-		void classGetFieldShouldMatchDeclaredFieldsHint() {
+		void classGetFieldShouldNotMatchDeclaredFieldsHint() {
 			hints.reflection().registerType(PublicField.class, MemberCategory.DECLARED_FIELDS);
-			assertThatInvocationMatches(InstrumentedMethod.CLASS_GETFIELD, this.getPublicField);
+			assertThatInvocationDoesNotMatch(InstrumentedMethod.CLASS_GETFIELD, this.getPublicField);
 		}
 
 		@Test

@@ -38,6 +38,7 @@ import static org.springframework.util.ReflectionUtils.findMethod;
  * @author Juergen Hoeller
  * @author Sam Brannen
  * @author Sebastien Deleuze
+ * @author Stephane Nicoll
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 class GenericTypeResolverTests {
@@ -65,29 +66,30 @@ class GenericTypeResolverTests {
 	@Test
 	void nullIfNotResolvable() {
 		GenericClass<String> obj = new GenericClass<>();
-		assertThat((Object) resolveTypeArgument(obj.getClass(), GenericClass.class)).isNull();
+		assertThat(resolveTypeArgument(obj.getClass(), GenericClass.class)).isNull();
 	}
 
 	@Test
 	void methodReturnTypes() {
-		assertThat(resolveReturnTypeArgument(findMethod(MyTypeWithMethods.class, "integer"), MyInterfaceType.class)).isEqualTo(Integer.class);
-		assertThat(resolveReturnTypeArgument(findMethod(MyTypeWithMethods.class, "string"), MyInterfaceType.class)).isEqualTo(String.class);
-		assertThat(resolveReturnTypeArgument(findMethod(MyTypeWithMethods.class, "raw"), MyInterfaceType.class)).isNull();
-		assertThat(resolveReturnTypeArgument(findMethod(MyTypeWithMethods.class, "object"), MyInterfaceType.class)).isNull();
+		assertThat(resolveReturnTypeArgument(method(MyTypeWithMethods.class, "integer"), MyInterfaceType.class)).isEqualTo(Integer.class);
+		assertThat(resolveReturnTypeArgument(method(MyTypeWithMethods.class, "string"), MyInterfaceType.class)).isEqualTo(String.class);
+		assertThat(resolveReturnTypeArgument(method(MyTypeWithMethods.class, "character"), MyAbstractType.class)).isEqualTo(Character.class);
+		assertThat(resolveReturnTypeArgument(method(MyTypeWithMethods.class, "raw"), MyInterfaceType.class)).isNull();
+		assertThat(resolveReturnTypeArgument(method(MyTypeWithMethods.class, "object"), MyInterfaceType.class)).isNull();
 	}
 
 	@Test
 	void testResolveType() {
-		Method intMessageMethod = findMethod(MyTypeWithMethods.class, "readIntegerInputMessage", MyInterfaceType.class);
+		Method intMessageMethod = method(MyTypeWithMethods.class, "readIntegerInputMessage", MyInterfaceType.class);
 		MethodParameter intMessageMethodParam = new MethodParameter(intMessageMethod, 0);
 		assertThat(resolveType(intMessageMethodParam.getGenericParameterType(), new HashMap<>())).isEqualTo(MyInterfaceType.class);
 
-		Method intArrMessageMethod = findMethod(MyTypeWithMethods.class, "readIntegerArrayInputMessage",
+		Method intArrMessageMethod = method(MyTypeWithMethods.class, "readIntegerArrayInputMessage",
 				MyInterfaceType[].class);
 		MethodParameter intArrMessageMethodParam = new MethodParameter(intArrMessageMethod, 0);
 		assertThat(resolveType(intArrMessageMethodParam.getGenericParameterType(), new HashMap<>())).isEqualTo(MyInterfaceType[].class);
 
-		Method genericArrMessageMethod = findMethod(MySimpleTypeWithMethods.class, "readGenericArrayInputMessage",
+		Method genericArrMessageMethod = method(MySimpleTypeWithMethods.class, "readGenericArrayInputMessage",
 				Object[].class);
 		MethodParameter genericArrMessageMethodParam = new MethodParameter(genericArrMessageMethod, 0);
 		Map<TypeVariable, Type> varMap = getTypeVariableMap(MySimpleTypeWithMethods.class);
@@ -100,7 +102,7 @@ class GenericTypeResolverTests {
 	}
 
 	@Test
-	void testGetTypeVariableMap() throws Exception {
+	void testGetTypeVariableMap() {
 		Map<TypeVariable, Type> map;
 
 		map = GenericTypeResolver.getTypeVariableMap(MySimpleInterfaceType.class);
@@ -137,16 +139,22 @@ class GenericTypeResolverTests {
 		assertThat(x).isEqualTo(Long.class);
 	}
 
+	@Test
+	void resolveTypeArgumentsOfAbstractType() {
+		Class<?>[] resolved = GenericTypeResolver.resolveTypeArguments(MyConcreteType.class, MyAbstractType.class);
+		assertThat(resolved).containsExactly(Character.class);
+	}
+
 	@Test  // SPR-11030
-	void getGenericsCannotBeResolved() throws Exception {
+	void getGenericsCannotBeResolved() {
 		Class<?>[] resolved = GenericTypeResolver.resolveTypeArguments(List.class, Iterable.class);
-		assertThat((Object) resolved).isNull();
+		assertThat(resolved).isNull();
 	}
 
 	@Test  // SPR-11052
-	void getRawMapTypeCannotBeResolved() throws Exception {
+	void getRawMapTypeCannotBeResolved() {
 		Class<?>[] resolved = GenericTypeResolver.resolveTypeArguments(Map.class, Map.class);
-		assertThat((Object) resolved).isNull();
+		assertThat(resolved).isNull();
 	}
 
 	@Test  // SPR-11044
@@ -187,48 +195,18 @@ class GenericTypeResolverTests {
 	}
 
 	@Test
-	void resolveWildcardTypeWithUpperBound() {
-		Method method = findMethod(MySimpleSuperclassType.class, "upperBound", List.class);
-		Type resolved = resolveType(method.getGenericParameterTypes()[0], MySimpleSuperclassType.class);
-		ResolvableType resolvableType = ResolvableType.forType(resolved);
-		assertThat(resolvableType.hasUnresolvableGenerics()).isFalse();
-		assertThat(resolvableType.resolveGenerics()).containsExactly(String.class);
+	public void resolveMethodParameterWithNestedGenerics() {
+		Method method = method(WithMethodParameter.class, "nestedGenerics", List.class);
+		MethodParameter methodParameter = new MethodParameter(method, 0);
+		Type resolvedType = resolveType(methodParameter.getGenericParameterType(), WithMethodParameter.class);
+		ParameterizedTypeReference<List<Map<String, Integer>>> reference = new ParameterizedTypeReference<>() {};
+		assertThat(resolvedType).isEqualTo(reference.getType());
 	}
 
-	@Test
-	void resolveWildcardTypeWithUpperBoundWithResolvedType() {
-		Method method = findMethod(MySimpleSuperclassType.class, "upperBoundWithResolvedType", List.class);
-		Type resolved = resolveType(method.getGenericParameterTypes()[0], MySimpleSuperclassType.class);
-		ResolvableType resolvableType = ResolvableType.forType(resolved);
-		assertThat(resolvableType.hasUnresolvableGenerics()).isFalse();
-		assertThat(resolvableType.resolveGenerics()).containsExactly(Integer.class);
-	}
-
-	@Test
-	void resolveWildcardTypeWithLowerBound() {
-		Method method = findMethod(MySimpleSuperclassType.class, "lowerBound", List.class);
-		Type resolved = resolveType(method.getGenericParameterTypes()[0], MySimpleSuperclassType.class);
-		ResolvableType resolvableType = ResolvableType.forType(resolved);
-		assertThat(resolvableType.hasUnresolvableGenerics()).isFalse();
-		assertThat(resolvableType.resolveGenerics()).containsExactly(String.class);
-	}
-
-	@Test
-	void resolveWildcardTypeWithLowerBoundWithResolvedType() {
-		Method method = findMethod(MySimpleSuperclassType.class, "lowerBoundWithResolvedType", List.class);
-		Type resolved = resolveType(method.getGenericParameterTypes()[0], MySimpleSuperclassType.class);
-		ResolvableType resolvableType = ResolvableType.forType(resolved);
-		assertThat(resolvableType.hasUnresolvableGenerics()).isFalse();
-		assertThat(resolvableType.resolveGenerics()).containsExactly(Integer.class);
-	}
-
-	@Test
-	void resolveWildcardTypeWithUnbounded() {
-		Method method = findMethod(MySimpleSuperclassType.class, "unbounded", List.class);
-		Type resolved = resolveType(method.getGenericParameterTypes()[0], MySimpleSuperclassType.class);
-		ResolvableType resolvableType = ResolvableType.forType(resolved);
-		assertThat(resolvableType.hasUnresolvableGenerics()).isFalse();
-		assertThat(resolvableType.resolveGenerics()).containsExactly(Object.class);
+	private static Method method(Class<?> target, String methodName, Class<?>... parameterTypes) {
+		Method method = findMethod(target, methodName, parameterTypes);
+		assertThat(method).describedAs(target.getName() + "#" + methodName).isNotNull();
+		return method;
 	}
 
 	public interface MyInterfaceType<T> {
@@ -240,22 +218,13 @@ class GenericTypeResolverTests {
 	public class MyCollectionInterfaceType implements MyInterfaceType<Collection<String>> {
 	}
 
+	public abstract class MyAbstractType<T> implements MyInterfaceType<T> {
+	}
+
+	public class MyConcreteType extends MyAbstractType<Character> {
+	}
+
 	public abstract class MySuperclassType<T> {
-
-		public void upperBound(List<? extends T> list) {
-		}
-
-		public void upperBoundWithResolvedType(List<? extends Integer> list) {
-		}
-
-		public void lowerBound(List<? extends T> list) {
-		}
-
-		public void lowerBoundWithResolvedType(List<? super Integer> list) {
-		}
-
-		public void unbounded(List<?> list) {
-		}
 	}
 
 	public class MySimpleSuperclassType extends MySuperclassType<String> {
@@ -273,6 +242,8 @@ class GenericTypeResolverTests {
 		public MySimpleInterfaceType string() {
 			return null;
 		}
+
+		public MyConcreteType character() { return null; }
 
 		public Object object() {
 			return null;
@@ -376,9 +347,9 @@ class GenericTypeResolverTests {
 	class TestImpl<I extends A, T extends B<I>> extends TestIfc<T>{
 	}
 
-	static abstract class BiGenericClass<T extends B<?>, V extends A> {}
+	abstract static class BiGenericClass<T extends B<?>, V extends A> {}
 
-	static abstract class SpecializedBiGenericClass<U extends C> extends BiGenericClass<D, U>{}
+	abstract static class SpecializedBiGenericClass<U extends C> extends BiGenericClass<D, U>{}
 
 	static class TypeFixedBiGenericClass extends SpecializedBiGenericClass<E> {}
 
@@ -392,12 +363,12 @@ class GenericTypeResolverTests {
 		}
 	}
 
-	static abstract class WithArrayBase<T> {
+	abstract static class WithArrayBase<T> {
 
 		public abstract T[] array(T... args);
 	}
 
-	static abstract class WithArray<T> extends WithArrayBase<T> {
+	abstract static class WithArray<T> extends WithArrayBase<T> {
 	}
 
 	interface Repository<T, ID extends Serializable> {
@@ -405,5 +376,31 @@ class GenericTypeResolverTests {
 
 	interface IdFixingRepository<T> extends Repository<T, Long> {
 	}
+
+	interface First<N extends Number> {
+
+		default void foo(N f) {
+			// ...
+		}
+	}
+
+	interface Second<T> {
+
+		default void bar(T b) {
+			// ...
+		}
+	}
+
+	static class FirstSecondService implements First<Integer>, Second<String> {
+	}
+
+	static class SecondFirstService implements Second<String>, First<Integer> {
+	}
+
+	static class WithMethodParameter {
+		public void nestedGenerics(List<Map<String, Integer>> input) {
+		}
+	}
+
 
 }
