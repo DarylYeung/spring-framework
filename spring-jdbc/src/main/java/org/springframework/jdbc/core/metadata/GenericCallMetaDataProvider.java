@@ -171,8 +171,8 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 	}
 
 	@Override
-	public boolean byPassReturnParameter(String parameterName) {
-		return false;
+	public String namedParameterBindingToUse(@Nullable String parameterName) {
+		return parameterName + " => ?";
 	}
 
 	@Override
@@ -213,6 +213,11 @@ public class GenericCallMetaDataProvider implements CallMetaDataProvider {
 	@Override
 	public boolean isProcedureColumnMetaDataUsed() {
 		return this.procedureColumnMetaDataUsed;
+	}
+
+	@Override
+	public boolean byPassReturnParameter(String parameterName) {
+		return false;
 	}
 
 

@@ -1086,8 +1086,8 @@ public abstract class AbstractAopProxyTests {
 		// NameReverter saved it back
 		assertThat(it.getName()).isEqualTo(name1);
 		assertThat(saver.names).hasSize(2);
-		assertThat(saver.names.get(0)).isEqualTo(name2);
-		assertThat(saver.names.get(1)).isEqualTo(name1);
+		assertThat(saver.names).element(0).isEqualTo(name2);
+		assertThat(saver.names).element(1).isEqualTo(name1);
 	}
 
 	@SuppressWarnings("serial")
@@ -1178,7 +1178,7 @@ public abstract class AbstractAopProxyTests {
 		assertThat(i2).isEqualTo(i1);
 		assertThat(proxyB).isEqualTo(proxyA);
 		assertThat(proxyB.hashCode()).isEqualTo(proxyA.hashCode());
-		assertThat(proxyA.equals(a)).isFalse();
+		assertThat(proxyA).isNotEqualTo(a);
 
 		// Equality checks were handled by the proxy
 		assertThat(i1.getCount()).isEqualTo(0);
@@ -1187,7 +1187,7 @@ public abstract class AbstractAopProxyTests {
 		// and won't think it's equal to B's NopInterceptor
 		proxyA.absquatulate();
 		assertThat(i1.getCount()).isEqualTo(1);
-		assertThat(proxyA.equals(proxyB)).isFalse();
+		assertThat(proxyA).isNotEqualTo(proxyB);
 	}
 
 	@Test

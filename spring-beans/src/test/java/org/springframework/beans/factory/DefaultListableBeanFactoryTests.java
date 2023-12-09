@@ -1845,19 +1845,19 @@ class DefaultListableBeanFactoryTests {
 			resolved.add(instance);
 		}
 		assertThat(resolved).hasSize(2);
-		assertThat(resolved.contains(lbf.getBean("bd1"))).isTrue();
-		assertThat(resolved.contains(lbf.getBean("bd2"))).isTrue();
+		assertThat(resolved).contains(lbf.getBean("bd1"));
+		assertThat(resolved).contains(lbf.getBean("bd2"));
 
 		resolved = new HashSet<>();
 		provider.forEach(resolved::add);
 		assertThat(resolved).hasSize(2);
-		assertThat(resolved.contains(lbf.getBean("bd1"))).isTrue();
-		assertThat(resolved.contains(lbf.getBean("bd2"))).isTrue();
+		assertThat(resolved).contains(lbf.getBean("bd1"));
+		assertThat(resolved).contains(lbf.getBean("bd2"));
 
 		resolved = provider.stream().collect(Collectors.toSet());
 		assertThat(resolved).hasSize(2);
-		assertThat(resolved.contains(lbf.getBean("bd1"))).isTrue();
-		assertThat(resolved.contains(lbf.getBean("bd2"))).isTrue();
+		assertThat(resolved).contains(lbf.getBean("bd1"));
+		assertThat(resolved).contains(lbf.getBean("bd2"));
 	}
 
 	@Test
@@ -1894,19 +1894,19 @@ class DefaultListableBeanFactoryTests {
 			resolved.add(instance);
 		}
 		assertThat(resolved).hasSize(2);
-		assertThat(resolved.contains(lbf.getBean("bd1"))).isTrue();
-		assertThat(resolved.contains(lbf.getBean("bd2"))).isTrue();
+		assertThat(resolved).contains(lbf.getBean("bd1"));
+		assertThat(resolved).contains(lbf.getBean("bd2"));
 
 		resolved = new HashSet<>();
 		provider.forEach(resolved::add);
 		assertThat(resolved).hasSize(2);
-		assertThat(resolved.contains(lbf.getBean("bd1"))).isTrue();
-		assertThat(resolved.contains(lbf.getBean("bd2"))).isTrue();
+		assertThat(resolved).contains(lbf.getBean("bd1"));
+		assertThat(resolved).contains(lbf.getBean("bd2"));
 
 		resolved = provider.stream().collect(Collectors.toSet());
 		assertThat(resolved).hasSize(2);
-		assertThat(resolved.contains(lbf.getBean("bd1"))).isTrue();
-		assertThat(resolved.contains(lbf.getBean("bd2"))).isTrue();
+		assertThat(resolved).contains(lbf.getBean("bd1"));
+		assertThat(resolved).contains(lbf.getBean("bd2"));
 	}
 
 	@Test
@@ -2238,9 +2238,9 @@ class DefaultListableBeanFactoryTests {
 		ObjectProvider<TestBean> testBeanProvider = lbf.getBeanProvider(ResolvableType.forClass(TestBean.class));
 		List<TestBean> resolved = testBeanProvider.orderedStream().toList();
 		assertThat(resolved.size()).isEqualTo(3);
-		assertThat(resolved.get(0)).isSameAs(lbf.getBean("highPriorityTestBean"));
-		assertThat(resolved.get(1)).isSameAs(lbf.getBean("lowPriorityTestBean"));
-		assertThat(resolved.get(2)).isSameAs(lbf.getBean("plainTestBean"));
+		assertThat(resolved).element(0).isSameAs(lbf.getBean("highPriorityTestBean"));
+		assertThat(resolved).element(1).isSameAs(lbf.getBean("lowPriorityTestBean"));
+		assertThat(resolved).element(2).isSameAs(lbf.getBean("plainTestBean"));
 	}
 
 	@Test

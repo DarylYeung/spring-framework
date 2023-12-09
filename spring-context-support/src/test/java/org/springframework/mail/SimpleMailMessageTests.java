@@ -56,11 +56,11 @@ public class SimpleMailMessageTests {
 		assertThat(message.getReplyTo()).isEqualTo("reply@mail.org");
 		assertThat(message.getTo()[0]).isEqualTo("you@mail.org");
 		List<String> ccs = Arrays.asList(message.getCc());
-		assertThat(ccs.contains("he@mail.org")).isTrue();
-		assertThat(ccs.contains("she@mail.org")).isTrue();
+		assertThat(ccs).contains("he@mail.org");
+		assertThat(ccs).contains("she@mail.org");
 		List<String> bccs = Arrays.asList(message.getBcc());
-		assertThat(bccs.contains("us@mail.org")).isTrue();
-		assertThat(bccs.contains("them@mail.org")).isTrue();
+		assertThat(bccs).contains("us@mail.org");
+		assertThat(bccs).contains("them@mail.org");
 		assertThat(message.getSentDate()).isEqualTo(sentDate);
 		assertThat(message.getSubject()).isEqualTo("my subject");
 		assertThat(message.getText()).isEqualTo("my text");
@@ -70,11 +70,11 @@ public class SimpleMailMessageTests {
 		assertThat(messageCopy.getReplyTo()).isEqualTo("reply@mail.org");
 		assertThat(messageCopy.getTo()[0]).isEqualTo("you@mail.org");
 		ccs = Arrays.asList(messageCopy.getCc());
-		assertThat(ccs.contains("he@mail.org")).isTrue();
-		assertThat(ccs.contains("she@mail.org")).isTrue();
+		assertThat(ccs).contains("he@mail.org");
+		assertThat(ccs).contains("she@mail.org");
 		bccs = Arrays.asList(message.getBcc());
-		assertThat(bccs.contains("us@mail.org")).isTrue();
-		assertThat(bccs.contains("them@mail.org")).isTrue();
+		assertThat(bccs).contains("us@mail.org");
+		assertThat(bccs).contains("them@mail.org");
 		assertThat(messageCopy.getSentDate()).isEqualTo(sentDate);
 		assertThat(messageCopy.getSubject()).isEqualTo("my subject");
 		assertThat(messageCopy.getText()).isEqualTo("my text");
@@ -128,7 +128,7 @@ public class SimpleMailMessageTests {
 		// Same object is equal
 		message1 = new SimpleMailMessage();
 		message2 = message1;
-		assertThat(message1.equals(message2)).isTrue();
+		assertThat(message1).isEqualTo(message2);
 
 		// Null object is not equal
 		message1 = new SimpleMailMessage();
@@ -143,7 +143,7 @@ public class SimpleMailMessageTests {
 		// Equal values are equal
 		message1 = new SimpleMailMessage();
 		message2 = new SimpleMailMessage();
-		assertThat(message1.equals(message2)).isTrue();
+		assertThat(message1).isEqualTo(message2);
 
 		message1 = new SimpleMailMessage();
 		message1.setFrom("from@somewhere");
@@ -155,7 +155,7 @@ public class SimpleMailMessageTests {
 		message1.setSubject("subject");
 		message1.setText("text");
 		message2 = new SimpleMailMessage(message1);
-		assertThat(message1.equals(message2)).isTrue();
+		assertThat(message1).isEqualTo(message2);
 	}
 
 	@Test

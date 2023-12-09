@@ -1050,7 +1050,7 @@ class ConfigurationClassPostProcessorTests {
 		CollectionArgumentConfiguration bean = ctx.getBean(CollectionArgumentConfiguration.class);
 		assertThat(bean.testBeans).isNotNull();
 		assertThat(bean.testBeans).hasSize(1);
-		assertThat(bean.testBeans.get(0)).isSameAs(ctx.getBean(TestBean.class));
+		assertThat(bean.testBeans).element(0).isSameAs(ctx.getBean(TestBean.class));
 		ctx.close();
 	}
 
@@ -1059,7 +1059,7 @@ class ConfigurationClassPostProcessorTests {
 		ConfigurableApplicationContext ctx = new AnnotationConfigApplicationContext(CollectionArgumentConfiguration.class);
 		CollectionArgumentConfiguration bean = ctx.getBean(CollectionArgumentConfiguration.class);
 		assertThat(bean.testBeans).isNotNull();
-		assertThat(bean.testBeans.isEmpty()).isTrue();
+		assertThat(bean.testBeans).isEmpty();
 		ctx.close();
 	}
 
@@ -1069,7 +1069,7 @@ class ConfigurationClassPostProcessorTests {
 		MapArgumentConfiguration bean = ctx.getBean(MapArgumentConfiguration.class);
 		assertThat(bean.testBeans).isNotNull();
 		assertThat(bean.testBeans).hasSize(1);
-		assertThat(bean.testBeans.values().iterator().next()).isSameAs(ctx.getBean(Runnable.class));
+		assertThat(bean.testBeans.values()).element(0).isSameAs(ctx.getBean(Runnable.class));
 		ctx.close();
 	}
 
@@ -1078,7 +1078,7 @@ class ConfigurationClassPostProcessorTests {
 		ConfigurableApplicationContext ctx = new AnnotationConfigApplicationContext(MapArgumentConfiguration.class);
 		MapArgumentConfiguration bean = ctx.getBean(MapArgumentConfiguration.class);
 		assertThat(bean.testBeans).isNotNull();
-		assertThat(bean.testBeans.isEmpty()).isTrue();
+		assertThat(bean.testBeans).isEmpty();
 		ctx.close();
 	}
 
@@ -1088,7 +1088,7 @@ class ConfigurationClassPostProcessorTests {
 		CollectionInjectionConfiguration bean = ctx.getBean(CollectionInjectionConfiguration.class);
 		assertThat(bean.testBeans).isNotNull();
 		assertThat(bean.testBeans).hasSize(1);
-		assertThat(bean.testBeans.get(0)).isSameAs(ctx.getBean(TestBean.class));
+		assertThat(bean.testBeans).element(0).isSameAs(ctx.getBean(TestBean.class));
 		ctx.close();
 	}
 

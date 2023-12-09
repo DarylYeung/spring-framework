@@ -341,9 +341,9 @@ public class MessageBrokerBeanDefinitionParserTests {
 
 		List<MessageConverter> converters = compositeMessageConverter.getConverters();
 		assertThat(converters).hasSize(3);
-		assertThat(converters.get(0)).isInstanceOf(StringMessageConverter.class);
-		assertThat(converters.get(1)).isInstanceOf(ByteArrayMessageConverter.class);
-		assertThat(converters.get(2)).isInstanceOf(MappingJackson2MessageConverter.class);
+		assertThat(converters).element(0).isInstanceOf(StringMessageConverter.class);
+		assertThat(converters).element(1).isInstanceOf(ByteArrayMessageConverter.class);
+		assertThat(converters).element(2).isInstanceOf(MappingJackson2MessageConverter.class);
 
 		ContentTypeResolver resolver = ((MappingJackson2MessageConverter) converters.get(2)).getContentTypeResolver();
 		assertThat(((DefaultContentTypeResolver) resolver).getDefaultMimeType()).isEqualTo(MimeTypeUtils.APPLICATION_JSON);
@@ -400,13 +400,13 @@ public class MessageBrokerBeanDefinitionParserTests {
 
 		List<HandlerMethodArgumentResolver> customResolvers = handler.getCustomArgumentResolvers();
 		assertThat(customResolvers).hasSize(2);
-		assertThat(handler.getArgumentResolvers().contains(customResolvers.get(0))).isTrue();
-		assertThat(handler.getArgumentResolvers().contains(customResolvers.get(1))).isTrue();
+		assertThat(handler.getArgumentResolvers()).contains(customResolvers.get(0));
+		assertThat(handler.getArgumentResolvers()).contains(customResolvers.get(1));
 
 		List<HandlerMethodReturnValueHandler> customHandlers = handler.getCustomReturnValueHandlers();
 		assertThat(customHandlers).hasSize(2);
-		assertThat(handler.getReturnValueHandlers().contains(customHandlers.get(0))).isTrue();
-		assertThat(handler.getReturnValueHandlers().contains(customHandlers.get(1))).isTrue();
+		assertThat(handler.getReturnValueHandlers()).contains(customHandlers.get(0));
+		assertThat(handler.getReturnValueHandlers()).contains(customHandlers.get(1));
 	}
 
 	@Test

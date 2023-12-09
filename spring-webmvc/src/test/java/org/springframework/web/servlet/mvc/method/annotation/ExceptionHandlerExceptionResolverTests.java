@@ -120,7 +120,7 @@ public class ExceptionHandlerExceptionResolverTests {
 		this.resolver.setCustomArgumentResolvers(Collections.singletonList(argumentResolver));
 		this.resolver.afterPropertiesSet();
 
-		assertThat(this.resolver.getArgumentResolvers().getResolvers().contains(argumentResolver)).isTrue();
+		assertThat(this.resolver.getArgumentResolvers().getResolvers()).contains(argumentResolver);
 		assertMethodProcessorCount(DEFAULT_RESOLVER_COUNT + 1, DEFAULT_HANDLER_COUNT);
 	}
 
@@ -139,7 +139,7 @@ public class ExceptionHandlerExceptionResolverTests {
 		this.resolver.setCustomReturnValueHandlers(Collections.singletonList(handler));
 		this.resolver.afterPropertiesSet();
 
-		assertThat(this.resolver.getReturnValueHandlers().getHandlers().contains(handler)).isTrue();
+		assertThat(this.resolver.getReturnValueHandlers().getHandlers()).contains(handler);
 		assertMethodProcessorCount(DEFAULT_RESOLVER_COUNT, DEFAULT_HANDLER_COUNT + 1);
 	}
 
@@ -381,6 +381,21 @@ public class ExceptionHandlerExceptionResolverTests {
 		IllegalStateException ex = new IllegalStateException();
 		ResourceHttpRequestHandler handler = new ResourceHttpRequestHandler();
 		ModelAndView mav = this.resolver.resolveException(this.request, this.response, handler, ex);
+
+		assertExceptionHandledAsBody(mav, "DefaultTestExceptionResolver: IllegalStateException");
+	}
+
+	@Test // gh-26772
+	void resolveExceptionViaMappedHandlerPredicate() throws Exception {
+		Object handler = new Object();
+
+		AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(MyControllerAdviceConfig.class);
+		this.resolver.setMappedHandlerPredicate(h -> h == handler);
+		this.resolver.setApplicationContext(ctx);
+		this.resolver.afterPropertiesSet();
+
+		ModelAndView mav = this.resolver.resolveException(
+				this.request, this.response, handler, new IllegalStateException());
 
 		assertExceptionHandledAsBody(mav, "DefaultTestExceptionResolver: IllegalStateException");
 	}

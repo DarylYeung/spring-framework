@@ -303,12 +303,12 @@ class EvaluationTests extends AbstractExpressionTests {
 
 			e = parser.parseExpression("address.crossStreets[0]");
 			e.setValue(context, "Blah");
-			assertThat(person.getAddress().getCrossStreets().get(0)).isEqualTo("Blah");
+			assertThat(person.getAddress().getCrossStreets()).element(0).isEqualTo("Blah");
 
 			e = parser.parseExpression("address.crossStreets[3]");
 			e.setValue(context, "Wibble");
-			assertThat(person.getAddress().getCrossStreets().get(0)).isEqualTo("Blah");
-			assertThat(person.getAddress().getCrossStreets().get(3)).isEqualTo("Wibble");
+			assertThat(person.getAddress().getCrossStreets()).element(0).isEqualTo("Blah");
+			assertThat(person.getAddress().getCrossStreets()).element(3).isEqualTo("Wibble");
 		}
 
 		/**
@@ -362,7 +362,7 @@ class EvaluationTests extends AbstractExpressionTests {
 			Expression e = parser.parseExpression("listOfStrings[++index3]='def'");
 			e.getValue(ctx);
 			assertThat(instance.listOfStrings).hasSize(2);
-			assertThat(instance.listOfStrings.get(1)).isEqualTo("def");
+			assertThat(instance.listOfStrings).element(1).isEqualTo("def");
 
 			// Check reference beyond end of collection
 			ctx = new StandardEvaluationContext(instance);
@@ -554,7 +554,7 @@ class EvaluationTests extends AbstractExpressionTests {
 
 		@Test
 		void propertyField() {
-			evaluate("name", "Nikola Tesla", String.class, false);
+			evaluate("name", "Nikola Tesla", String.class, true);
 			// not writable because (1) name is private (2) there is no setter, only a getter
 			evaluateAndCheckError("madeup", SpelMessage.PROPERTY_OR_FIELD_NOT_READABLE, 0, "madeup",
 					"org.springframework.expression.spel.testresources.Inventor");
@@ -876,7 +876,7 @@ class EvaluationTests extends AbstractExpressionTests {
 			e = parser.parseExpression("bd++");
 			assertThat(new BigDecimal("2").equals(helper.bd)).isTrue();
 			BigDecimal return_bd = e.getValue(ctx, BigDecimal.class);
-			assertThat(new BigDecimal("2").equals(return_bd)).isTrue();
+			assertThat(new BigDecimal("2")).isEqualTo(return_bd);
 			assertThat(new BigDecimal("3").equals(helper.bd)).isTrue();
 
 			// double
@@ -929,7 +929,7 @@ class EvaluationTests extends AbstractExpressionTests {
 			e = parser.parseExpression("++bd");
 			assertThat(new BigDecimal("2").equals(helper.bd)).isTrue();
 			BigDecimal return_bd = e.getValue(ctx, BigDecimal.class);
-			assertThat(new BigDecimal("3").equals(return_bd)).isTrue();
+			assertThat(new BigDecimal("3")).isEqualTo(return_bd);
 			assertThat(new BigDecimal("3").equals(helper.bd)).isTrue();
 
 			// double
@@ -1026,7 +1026,7 @@ class EvaluationTests extends AbstractExpressionTests {
 			e = parser.parseExpression("bd--");
 			assertThat(new BigDecimal("2").equals(helper.bd)).isTrue();
 			BigDecimal return_bd = e.getValue(ctx,BigDecimal.class);
-			assertThat(new BigDecimal("2").equals(return_bd)).isTrue();
+			assertThat(new BigDecimal("2")).isEqualTo(return_bd);
 			assertThat(new BigDecimal("1").equals(helper.bd)).isTrue();
 
 			// double
@@ -1079,7 +1079,7 @@ class EvaluationTests extends AbstractExpressionTests {
 			e = parser.parseExpression("--bd");
 			assertThat(new BigDecimal("2").equals(helper.bd)).isTrue();
 			BigDecimal return_bd = e.getValue(ctx,BigDecimal.class);
-			assertThat(new BigDecimal("1").equals(return_bd)).isTrue();
+			assertThat(new BigDecimal("1")).isEqualTo(return_bd);
 			assertThat(new BigDecimal("1").equals(helper.bd)).isTrue();
 
 			// double

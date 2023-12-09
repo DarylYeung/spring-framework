@@ -28,13 +28,16 @@ import org.springframework.core.annotation.AliasFor;
 import org.springframework.core.type.filter.TypeFilter;
 
 /**
- * Configures component scanning directives for use with @{@link Configuration} classes.
- * Provides support parallel with Spring XML's {@code <context:component-scan>} element.
+ * Configures component scanning directives for use with {@link Configuration @Configuration}
+ * classes.
+ *
+ * <p>Provides support comparable to Spring's {@code <context:component-scan>}
+ * XML namespace element.
  *
  * <p>Either {@link #basePackageClasses} or {@link #basePackages} (or its alias
  * {@link #value}) may be specified to define specific packages to scan. If specific
- * packages are not defined, scanning will occur from the package of the
- * class that declares this annotation.
+ * packages are not defined, scanning will occur recursively beginning with the
+ * package of the class that declares this annotation.
  *
  * <p>Note that the {@code <context:component-scan>} element has an
  * {@code annotation-config} attribute; however, this annotation does not. This is because
@@ -49,6 +52,12 @@ import org.springframework.core.type.filter.TypeFilter;
  * <p>{@code @ComponentScan} can be used as a <em>{@linkplain Repeatable repeatable}</em>
  * annotation. {@code @ComponentScan} may also be used as a <em>meta-annotation</em>
  * to create custom <em>composed annotations</em> with attribute overrides.
+ *
+ * <p>Locally declared {@code @ComponentScan} annotations always take precedence
+ * over and effectively <em>hide</em> {@code @ComponentScan} meta-annotations,
+ * which allows explicit local configuration to override configuration that is
+ * <em>meta-present</em> (including composed annotations meta-annotated with
+ * {@code @ComponentScan}).
  *
  * @author Chris Beams
  * @author Juergen Hoeller

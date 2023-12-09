@@ -88,7 +88,7 @@ public class HandlersBeanDefinitionParserTests {
 			assertThat(condition2).isTrue();
 			SimpleUrlHandlerMapping shm = (SimpleUrlHandlerMapping) hm;
 
-			if (shm.getUrlMap().keySet().contains("/foo")) {
+			if (shm.getUrlMap().containsKey("/foo")) {
 				assertThat(shm.getUrlMap()).containsOnlyKeys("/foo", "/bar");
 				WebSocketHttpRequestHandler handler = (WebSocketHttpRequestHandler) shm.getUrlMap().get("/foo");
 				assertThat(handler).isNotNull();
@@ -97,7 +97,7 @@ public class HandlersBeanDefinitionParserTests {
 				assertThat(handshakeHandler).isNotNull();
 				boolean condition1 = handshakeHandler instanceof DefaultHandshakeHandler;
 				assertThat(condition1).isTrue();
-				assertThat(handler.getHandshakeInterceptors().isEmpty()).isFalse();
+				assertThat(handler.getHandshakeInterceptors()).isNotEmpty();
 				boolean condition = handler.getHandshakeInterceptors().get(0) instanceof OriginHandshakeInterceptor;
 				assertThat(condition).isTrue();
 			}
@@ -110,7 +110,7 @@ public class HandlersBeanDefinitionParserTests {
 				assertThat(handshakeHandler).isNotNull();
 				boolean condition1 = handshakeHandler instanceof DefaultHandshakeHandler;
 				assertThat(condition1).isTrue();
-				assertThat(handler.getHandshakeInterceptors().isEmpty()).isFalse();
+				assertThat(handler.getHandshakeInterceptors()).isNotEmpty();
 				boolean condition = handler.getHandshakeInterceptors().get(0) instanceof OriginHandshakeInterceptor;
 				assertThat(condition).isTrue();
 			}

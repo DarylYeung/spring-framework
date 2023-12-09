@@ -257,16 +257,22 @@ class MultipartRouterFunctionIntegrationTests extends AbstractRouterFunctionInte
 						assertThat(data).hasSize(2);
 
 						List<PartEvent> fileData = data.get(0);
-						assertThat(fileData).hasSize(1);
-						assertThat(fileData.get(0)).isInstanceOf(FilePartEvent.class);
+						assertThat(fileData).hasSize(2);
+						assertThat(fileData).element(0).isInstanceOf(FilePartEvent.class);
 						FilePartEvent filePartEvent = (FilePartEvent) fileData.get(0);
+						assertThat(filePartEvent.name()).isEqualTo("fooPart");
+						assertThat(filePartEvent.filename()).isEqualTo("foo.txt");
+						DataBufferUtils.release(filePartEvent.content());
+
+						assertThat(fileData).element(1).isInstanceOf(FilePartEvent.class);
+						filePartEvent = (FilePartEvent) fileData.get(1);
 						assertThat(filePartEvent.name()).isEqualTo("fooPart");
 						assertThat(filePartEvent.filename()).isEqualTo("foo.txt");
 						DataBufferUtils.release(filePartEvent.content());
 
 						List<PartEvent> fieldData = data.get(1);
 						assertThat(fieldData).hasSize(1);
-						assertThat(fieldData.get(0)).isInstanceOf(FormPartEvent.class);
+						assertThat(fieldData).element(0).isInstanceOf(FormPartEvent.class);
 						FormPartEvent formPartEvent = (FormPartEvent) fieldData.get(0);
 						assertThat(formPartEvent.name()).isEqualTo("barPart");
 						assertThat(formPartEvent.content().toString(StandardCharsets.UTF_8)).isEqualTo("bar");

@@ -55,9 +55,9 @@ public class CollectionMergingTests {
 		TestBean bean = (TestBean) this.beanFactory.getBean("childWithList");
 		List<?> list = bean.getSomeList();
 		assertThat(list).as("Incorrect size").hasSize(3);
-		assertThat(list.get(0)).isEqualTo("Rob Harrop");
-		assertThat(list.get(1)).isEqualTo("Rod Johnson");
-		assertThat(list.get(2)).isEqualTo("Juergen Hoeller");
+		assertThat(list).element(0).isEqualTo("Rob Harrop");
+		assertThat(list).element(1).isEqualTo("Rod Johnson");
+		assertThat(list).element(2).isEqualTo("Juergen Hoeller");
 	}
 
 	@Test
@@ -66,7 +66,7 @@ public class CollectionMergingTests {
 		List<?> list = bean.getSomeList();
 		assertThat(list).isNotNull();
 		assertThat(list).hasSize(3);
-		assertThat(list.get(2) instanceof TestBean).isTrue();
+		assertThat(list.get(2)).isInstanceOf(TestBean.class);
 	}
 
 	@Test
@@ -87,7 +87,7 @@ public class CollectionMergingTests {
 		Iterator it = set.iterator();
 		it.next();
 		Object o = it.next();
-		assertThat(o instanceof TestBean).isTrue();
+		assertThat(o).isInstanceOf(TestBean.class);
 		assertThat(((TestBean) o).getName()).isEqualTo("Sally");
 	}
 
@@ -108,7 +108,7 @@ public class CollectionMergingTests {
 		assertThat(map).isNotNull();
 		assertThat(map).hasSize(2);
 		assertThat(map.get("Rob")).isNotNull();
-		assertThat(map.get("Rob") instanceof TestBean).isTrue();
+		assertThat(map.get("Rob")).isInstanceOf(TestBean.class);
 		assertThat(((TestBean) map.get("Rob")).getName()).isEqualTo("Sally");
 	}
 
@@ -127,9 +127,9 @@ public class CollectionMergingTests {
 		TestBean bean = (TestBean) this.beanFactory.getBean("childWithListInConstructor");
 		List<?> list = bean.getSomeList();
 		assertThat(list).as("Incorrect size").hasSize(3);
-		assertThat(list.get(0)).isEqualTo("Rob Harrop");
-		assertThat(list.get(1)).isEqualTo("Rod Johnson");
-		assertThat(list.get(2)).isEqualTo("Juergen Hoeller");
+		assertThat(list).element(0).isEqualTo("Rob Harrop");
+		assertThat(list).element(1).isEqualTo("Rod Johnson");
+		assertThat(list).element(2).isEqualTo("Juergen Hoeller");
 	}
 
 	@Test
@@ -138,8 +138,8 @@ public class CollectionMergingTests {
 		List<?> list = bean.getSomeList();
 		assertThat(list).isNotNull();
 		assertThat(list).hasSize(3);
-		assertThat(list.get(2)).isNotNull();
-		assertThat(list.get(2) instanceof TestBean).isTrue();
+		assertThat(list).element(2).isNotNull();
+		assertThat(list.get(2)).isInstanceOf(TestBean.class);
 	}
 
 	@Test
@@ -160,7 +160,7 @@ public class CollectionMergingTests {
 		Iterator it = set.iterator();
 		it.next();
 		Object o = it.next();
-		assertThat(o instanceof TestBean).isTrue();
+		assertThat(o).isInstanceOf(TestBean.class);
 		assertThat(((TestBean) o).getName()).isEqualTo("Sally");
 	}
 
@@ -180,7 +180,7 @@ public class CollectionMergingTests {
 		Map<?, ?> map = bean.getSomeMap();
 		assertThat(map).isNotNull();
 		assertThat(map).hasSize(2);
-		assertThat(map.get("Rob") instanceof TestBean).isTrue();
+		assertThat(map.get("Rob")).isInstanceOf(TestBean.class);
 		assertThat(((TestBean) map.get("Rob")).getName()).isEqualTo("Sally");
 	}
 

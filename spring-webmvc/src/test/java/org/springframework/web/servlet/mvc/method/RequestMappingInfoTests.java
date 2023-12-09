@@ -204,9 +204,9 @@ class RequestMappingInfoTests {
 		Collections.shuffle(list);
 		list.sort(comparator);
 
-		assertThat(list.get(0)).isEqualTo(oneMethodOneParam);
-		assertThat(list.get(1)).isEqualTo(oneMethod);
-		assertThat(list.get(2)).isEqualTo(noMethods);
+		assertThat(list).element(0).isEqualTo(oneMethodOneParam);
+		assertThat(list).element(1).isEqualTo(oneMethod);
+		assertThat(list).element(2).isEqualTo(noMethods);
 	}
 
 	@Test
@@ -226,9 +226,9 @@ class RequestMappingInfoTests {
 		Collections.shuffle(list);
 		list.sort(comparator);
 
-		assertThat(list.get(0)).isEqualTo(headMethod);
-		assertThat(list.get(1)).isEqualTo(getMethod);
-		assertThat(list.get(2)).isEqualTo(noMethods);
+		assertThat(list).element(0).isEqualTo(headMethod);
+		assertThat(list).element(1).isEqualTo(getMethod);
+		assertThat(list).element(2).isEqualTo(noMethods);
 	}
 
 	@PathPatternsParameterizedTest
@@ -251,7 +251,7 @@ class RequestMappingInfoTests {
 				.consumes("text/plain").produces("text/plain")
 				.build();
 
-		assertThat(info1.equals(info2)).isFalse();
+		assertThat(info1).isNotEqualTo(info2);
 		assertThat(info2.hashCode()).isNotEqualTo(info1.hashCode());
 
 		info2 = infoBuilder.paths("/foo").methods(GET, RequestMethod.POST)
@@ -259,7 +259,7 @@ class RequestMappingInfoTests {
 				.consumes("text/plain").produces("text/plain")
 				.build();
 
-		assertThat(info1.equals(info2)).isFalse();
+		assertThat(info1).isNotEqualTo(info2);
 		assertThat(info2.hashCode()).isNotEqualTo(info1.hashCode());
 
 		info2 = infoBuilder.paths("/foo").methods(GET)
@@ -267,7 +267,7 @@ class RequestMappingInfoTests {
 				.consumes("text/plain").produces("text/plain")
 				.build();
 
-		assertThat(info1.equals(info2)).isFalse();
+		assertThat(info1).isNotEqualTo(info2);
 		assertThat(info2.hashCode()).isNotEqualTo(info1.hashCode());
 
 		info2 = infoBuilder.paths("/foo").methods(GET)
@@ -275,7 +275,7 @@ class RequestMappingInfoTests {
 				.consumes("text/plain").produces("text/plain")
 				.build();
 
-		assertThat(info1.equals(info2)).isFalse();
+		assertThat(info1).isNotEqualTo(info2);
 		assertThat(info2.hashCode()).isNotEqualTo(info1.hashCode());
 
 		info2 = infoBuilder.paths("/foo").methods(GET)
@@ -283,7 +283,7 @@ class RequestMappingInfoTests {
 				.consumes("text/NOOOOOO").produces("text/plain")
 				.build();
 
-		assertThat(info1.equals(info2)).isFalse();
+		assertThat(info1).isNotEqualTo(info2);
 		assertThat(info2.hashCode()).isNotEqualTo(info1.hashCode());
 
 		info2 = infoBuilder.paths("/foo").methods(GET)
@@ -291,7 +291,7 @@ class RequestMappingInfoTests {
 				.consumes("text/plain").produces("text/NOOOOOO")
 				.build();
 
-		assertThat(info1.equals(info2)).isFalse();
+		assertThat(info1).isNotEqualTo(info2);
 		assertThat(info2.hashCode()).isNotEqualTo(info1.hashCode());
 
 		info2 = infoBuilder.paths("/foo").methods(GET)
@@ -299,7 +299,7 @@ class RequestMappingInfoTests {
 				.consumes("text/plain").produces("text/plain")
 				.build();
 
-		assertThat(info1.equals(info2)).isFalse();
+		assertThat(info1).isNotEqualTo(info2);
 		assertThat(info2.hashCode()).isNotEqualTo(info1.hashCode());
 	}
 

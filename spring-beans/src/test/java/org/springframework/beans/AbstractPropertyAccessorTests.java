@@ -414,7 +414,7 @@ abstract class AbstractPropertyAccessorTests {
 		Map<String, String> map = new HashMap<>();
 		map.put("favoriteNumber", "9");
 		accessor.setPropertyValue("list[0]", map);
-		assertThat(target.list.get(0)).isEqualTo(map);
+		assertThat(target.list).element(0).isEqualTo(map);
 	}
 
 	@Test
@@ -1143,12 +1143,12 @@ abstract class AbstractPropertyAccessorTests {
 		assertThat(target.getSet()).hasSize(1);
 		assertThat(target.getSet().contains("set1")).isTrue();
 		assertThat(target.getSortedSet()).hasSize(1);
-		assertThat(target.getSortedSet().contains("sortedSet1")).isTrue();
+		assertThat(target.getSortedSet()).contains("sortedSet1");
 		assertThat(target.getList()).hasSize(1);
-		assertThat(target.getList().contains("list1")).isTrue();
+		assertThat(target.getList()).contains("list1");
 
 		accessor.setPropertyValue("list", Collections.singletonList("list1 "));
-		assertThat(target.getList().contains("list1")).isTrue();
+		assertThat(target.getList()).contains("list1");
 	}
 
 	@Test
